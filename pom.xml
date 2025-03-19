@@ -8,9 +8,14 @@
     <artifactId>photovoltaic-analyser</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
+
+    <name>Photovoltaic Analyser</name>
+    <description>Sistema de análisis fotovoltaico con datos meteorológicos y precios de energía</description>
+
     <modules>
-        <module>weather-feeder</module>
+        <module>app</module>
         <module>energy-feeder</module>
+        <module>weather-feeder</module>
     </modules>
 
     <properties>
