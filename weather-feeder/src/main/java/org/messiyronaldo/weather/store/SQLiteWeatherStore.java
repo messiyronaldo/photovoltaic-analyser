@@ -1,4 +1,7 @@
-package org.messiyronaldo;
+package org.messiyronaldo.weather.store;
+
+import org.messiyronaldo.weather.model.Location;
+import org.messiyronaldo.weather.model.Weather;
 
 import java.sql.*;
 import java.time.Instant;
@@ -7,7 +10,7 @@ import java.util.*;
 /**
  * Repositorio para la persistencia de datos meteorológicos en SQLite
  */
-public class WeatherRepository {
+public class SQLiteWeatherStore implements WeatherStore {
 	private final String dbPath;
 
 	/**
@@ -15,7 +18,7 @@ public class WeatherRepository {
 	 *
 	 * @param dbPath Ruta del archivo de base de datos SQLite
 	 */
-	public WeatherRepository(String dbPath) {
+	public SQLiteWeatherStore(String dbPath) {
 		this.dbPath = dbPath;
 		initializeDatabase();
 	}

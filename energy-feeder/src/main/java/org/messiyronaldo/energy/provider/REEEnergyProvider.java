@@ -1,4 +1,4 @@
-package org.messiyronaldo;
+package org.messiyronaldo.energy.provider;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -7,6 +7,7 @@ import com.google.gson.JsonObject;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import org.messiyronaldo.energy.model.EnergyPrice;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -23,7 +24,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Proveedor de datos de precios de energía que utiliza la API de Red Eléctrica Española
  */
-public class REEEnergyProvider {
+public class REEEnergyProvider implements EnergyPricesProvider {
 	private static final String BASE_URL = "https://apidatos.ree.es/es/datos/mercados/precios-mercados-tiempo-real";
 	private final OkHttpClient client;
 	private final Gson gson;
@@ -60,7 +61,6 @@ public class REEEnergyProvider {
 	 *
 	 * @param date Fecha para la que se quieren obtener los precios
 	 * @return Lista de precios de energía
-	 * @throws IOException Si hay un error en la comunicación con la API
 	 */
 	public List<EnergyPrice> getEnergyPrices(LocalDate date) throws IOException {
 		// Construir URL con parámetros para obtener los datos del día completo

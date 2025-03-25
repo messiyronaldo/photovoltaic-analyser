@@ -1,5 +1,13 @@
 package org.messiyronaldo;
 
+import org.messiyronaldo.energy.model.EnergyPrice;
+import org.messiyronaldo.energy.provider.REEEnergyProvider;
+import org.messiyronaldo.energy.store.SQLiteEnergyPriceStore;
+import org.messiyronaldo.weather.model.Location;
+import org.messiyronaldo.weather.model.Weather;
+import org.messiyronaldo.weather.provider.OpenWeatherProvider;
+import org.messiyronaldo.weather.store.SQLiteWeatherStore;
+
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.time.LocalDate;
@@ -66,7 +74,7 @@ public class App {
 	private static void fetchWeatherData(String apiKey, String dbPath) throws IOException {
 		// Inicializar componentes para clima
 		OpenWeatherProvider weatherProvider = new OpenWeatherProvider(apiKey);
-		WeatherRepository weatherRepository = new WeatherRepository(dbPath);
+		SQLiteWeatherStore weatherRepository = new SQLiteWeatherStore(dbPath);
 
 		// Preparar lista de ubicaciones
 		List<Location> locations = new ArrayList<>();
@@ -108,7 +116,7 @@ public class App {
 	private static void fetchEnergyPriceData(String dbPath, LocalDate date) throws IOException {
 		// Inicializar componentes para precios de energía
 		REEEnergyProvider energyProvider = new REEEnergyProvider();
-		EnergyPriceRepository energyRepository = new EnergyPriceRepository(dbPath);
+		SQLiteEnergyPriceStore energyRepository = new SQLiteEnergyPriceStore(dbPath);
 
 		System.out.println("\n===== PRECIOS DE ENERGÍA =====");
 		System.out.println("Obteniendo precios de energía para: " + date);

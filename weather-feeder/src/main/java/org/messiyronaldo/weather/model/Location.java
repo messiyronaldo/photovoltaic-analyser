@@ -1,4 +1,4 @@
-package org.messiyronaldo;
+package org.messiyronaldo.weather.model;
 
 public class Location {
 	private String name;

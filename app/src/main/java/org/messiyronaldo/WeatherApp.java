@@ -1,5 +1,10 @@
 package org.messiyronaldo;
 
+import org.messiyronaldo.weather.model.Location;
+import org.messiyronaldo.weather.model.Weather;
+import org.messiyronaldo.weather.provider.OpenWeatherProvider;
+import org.messiyronaldo.weather.store.SQLiteWeatherStore;
+
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.List;
@@ -27,7 +32,7 @@ public class WeatherApp {
 		try {
 			// Inicializar componentes
 			OpenWeatherProvider weatherProvider = new OpenWeatherProvider(apiKey);
-			WeatherRepository weatherRepository = new WeatherRepository(dbPath);
+			SQLiteWeatherStore weatherRepository = new SQLiteWeatherStore(dbPath);
 
 			// Obtener datos para Madrid
 			System.out.println("Obteniendo pronóstico para " + MADRID.getName() + "...");

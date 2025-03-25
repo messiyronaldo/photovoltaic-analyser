@@ -1,4 +1,4 @@
-package org.messiyronaldo;
+package org.messiyronaldo.weather.provider;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -7,6 +7,8 @@ import com.google.gson.JsonObject;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import org.messiyronaldo.weather.model.Location;
+import org.messiyronaldo.weather.model.Weather;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -18,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Proveedor de datos meteorológicos que utiliza la API OpenWeather
  */
-public class OpenWeatherProvider {
+public class OpenWeatherProvider implements WeatherProvider {
 	private static final String BASE_URL = "https://pro.openweathermap.org/data/2.5/forecast/hourly";
 	private final String apiKey;
 	private final OkHttpClient client;

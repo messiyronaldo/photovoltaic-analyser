@@ -1,4 +1,6 @@
-package org.messiyronaldo;
+package org.messiyronaldo.energy.store;
+
+import org.messiyronaldo.energy.model.EnergyPrice;
 
 import java.sql.*;
 import java.time.Instant;
@@ -12,7 +14,7 @@ import java.util.Map;
 /**
  * Repositorio para la persistencia de datos de precios de energía en SQLite
  */
-public class EnergyPriceRepository {
+public class SQLiteEnergyPriceStore implements EnergyPricesStore {
 	private final String dbPath;
 
 	/**
@@ -20,7 +22,7 @@ public class EnergyPriceRepository {
 	 *
 	 * @param dbPath Ruta del archivo de base de datos SQLite
 	 */
-	public EnergyPriceRepository(String dbPath) {
+	public SQLiteEnergyPriceStore(String dbPath) {
 		this.dbPath = dbPath;
 		initializeDatabase();
 	}

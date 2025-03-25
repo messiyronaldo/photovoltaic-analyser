@@ -1,4 +1,4 @@
-package org.messiyronaldo;
+package org.messiyronaldo.energy.model;
 
 import java.time.Instant;
 
