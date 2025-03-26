@@ -1,14 +1,14 @@
 package org.messiyronaldo.config;
 
-import org.messiyronaldo.energy.provider.EnergyPricesProvider;
-import org.messiyronaldo.energy.provider.REEEnergyProvider;
-import org.messiyronaldo.energy.store.EnergyPricesStore;
-import org.messiyronaldo.energy.store.SQLiteEnergyPriceStore;
+import org.messiyronaldo.energy.control.EnergyPricesProvider;
+import org.messiyronaldo.energy.control.REEEnergyProvider;
+import org.messiyronaldo.energy.control.EnergyPricesStore;
+import org.messiyronaldo.energy.control.SQLiteEnergyPriceStore;
 import org.messiyronaldo.weather.model.Location;
-import org.messiyronaldo.weather.provider.OpenWeatherProvider;
-import org.messiyronaldo.weather.provider.WeatherProvider;
-import org.messiyronaldo.weather.store.SQLiteWeatherStore;
-import org.messiyronaldo.weather.store.WeatherStore;
+import org.messiyronaldo.weather.control.OpenWeatherProvider;
+import org.messiyronaldo.weather.control.WeatherProvider;
+import org.messiyronaldo.weather.control.SQLiteWeatherStore;
+import org.messiyronaldo.weather.control.WeatherStore;
 
 import java.nio.file.Paths;
 import java.util.ArrayList;

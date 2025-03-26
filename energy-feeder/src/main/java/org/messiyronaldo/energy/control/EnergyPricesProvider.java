@@ -1,4 +1,4 @@
-package org.messiyronaldo.energy.provider;
+package org.messiyronaldo.energy.control;
 
 import org.messiyronaldo.energy.model.EnergyPrice;
 import java.io.IOException;

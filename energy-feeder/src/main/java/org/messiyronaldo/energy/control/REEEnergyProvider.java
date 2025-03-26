@@ -1,4 +1,4 @@
-package org.messiyronaldo.energy.provider;
+package org.messiyronaldo.energy.control;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;

@@ -1,4 +1,4 @@
-package org.messiyronaldo.weather.provider;
+package org.messiyronaldo.weather.control;
 
 import org.messiyronaldo.weather.model.Weather;
 import org.messiyronaldo.weather.model.Location;

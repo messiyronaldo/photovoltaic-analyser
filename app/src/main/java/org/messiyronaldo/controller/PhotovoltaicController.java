@@ -1,16 +1,12 @@
 package org.messiyronaldo.controller;
 
 import org.messiyronaldo.energy.model.EnergyPrice;
-import org.messiyronaldo.energy.provider.EnergyPricesProvider;
-import org.messiyronaldo.energy.provider.REEEnergyProvider;
-import org.messiyronaldo.energy.store.EnergyPricesStore;
-import org.messiyronaldo.energy.store.SQLiteEnergyPriceStore;
+import org.messiyronaldo.energy.control.EnergyPricesProvider;
+import org.messiyronaldo.energy.control.EnergyPricesStore;
 import org.messiyronaldo.weather.model.Location;
 import org.messiyronaldo.weather.model.Weather;
-import org.messiyronaldo.weather.provider.OpenWeatherProvider;
-import org.messiyronaldo.weather.provider.WeatherProvider;
-import org.messiyronaldo.weather.store.SQLiteWeatherStore;
-import org.messiyronaldo.weather.store.WeatherStore;
+import org.messiyronaldo.weather.control.WeatherProvider;
+import org.messiyronaldo.weather.control.WeatherStore;
 
 import java.io.IOException;
 import java.time.LocalDate;

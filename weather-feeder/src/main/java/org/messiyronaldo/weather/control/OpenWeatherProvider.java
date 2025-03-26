@@ -1,4 +1,4 @@
-package org.messiyronaldo.weather.provider;
+package org.messiyronaldo.weather.control;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;

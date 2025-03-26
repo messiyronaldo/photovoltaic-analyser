@@ -1,4 +1,4 @@
-package org.messiyronaldo.energy.store;
+package org.messiyronaldo.energy.control;
 
 import org.messiyronaldo.energy.model.EnergyPrice;
 

@@ -2,11 +2,11 @@ package org.messiyronaldo;
 
 import org.messiyronaldo.config.PhotovoltaicSystemConfig;
 import org.messiyronaldo.controller.PhotovoltaicController;
-import org.messiyronaldo.energy.provider.EnergyPricesProvider;
-import org.messiyronaldo.energy.store.EnergyPricesStore;
+import org.messiyronaldo.energy.control.EnergyPricesProvider;
+import org.messiyronaldo.energy.control.EnergyPricesStore;
 import org.messiyronaldo.weather.model.Location;
-import org.messiyronaldo.weather.provider.WeatherProvider;
-import org.messiyronaldo.weather.store.WeatherStore;
+import org.messiyronaldo.weather.control.WeatherProvider;
+import org.messiyronaldo.weather.control.WeatherStore;
 
 import java.util.List;
 

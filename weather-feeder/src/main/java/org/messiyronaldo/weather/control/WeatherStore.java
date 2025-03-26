@@ -1,4 +1,4 @@
-package org.messiyronaldo.weather.store;
+package org.messiyronaldo.weather.control;
 
 import org.messiyronaldo.weather.model.Weather;
 import java.util.List;
