@@ -66,28 +66,6 @@ public class PhotovoltaicController {
 	}
 
 	/**
-	 * Constructor con configuración predeterminada.
-	 */
-	public static PhotovoltaicController createWithDefaults(String openWeatherApiKey, String dbPath) {
-		// Inicializar proveedores
-		WeatherProvider weatherProvider = new OpenWeatherProvider(openWeatherApiKey);
-		EnergyPricesProvider energyProvider = new REEEnergyProvider();
-
-		// Inicializar almacenes
-		WeatherStore weatherStore = new SQLiteWeatherStore(dbPath);
-		EnergyPricesStore energyStore = new SQLiteEnergyPriceStore(dbPath);
-
-		// Ubicaciones predefinidas
-		List<Location> locations = new ArrayList<>();
-		locations.add(new Location("Madrid", 40.4165, -3.7026));
-		locations.add(new Location("Las Palmas", 28.151286, -15.427340));
-
-		// Crear controlador con actualizaciones cada 6 horas para clima y 12 horas para precios
-		return new PhotovoltaicController(
-				weatherProvider, weatherStore, energyProvider, energyStore, locations, 6, 12);
-	}
-
-	/**
 	 * Inicia las tareas programadas.
 	 */
 	public void start() {
@@ -220,33 +198,5 @@ public class PhotovoltaicController {
 		}
 
 		System.out.println("Actualización de precios de energía completada.");
-	}
-
-	/**
-	 * Obtiene los pronósticos meteorológicos más recientes para una ubicación.
-	 */
-	public List<Weather> getLatestWeatherForecasts(Location location) {
-		databaseLock.lock();
-		try {
-			return weatherStore.getWeatherForecasts(location.getLatitude(), location.getLongitude());
-		} finally {
-			databaseLock.unlock();
-		}
-	}
-
-	/**
-	 * Obtiene los precios de energía para una fecha específica.
-	 */
-	public List<EnergyPrice> getEnergyPricesForDate(LocalDate date) {
-		databaseLock.lock();
-		try {
-			ZoneId zoneId = ZoneId.of("Europe/Madrid");
-			return energyStore.getEnergyPrices(
-					date.atStartOfDay(zoneId).toInstant(),
-					date.plusDays(1).atStartOfDay(zoneId).minusSeconds(1).toInstant()
-			);
-		} finally {
-			databaseLock.unlock();
-		}
 	}
 }
