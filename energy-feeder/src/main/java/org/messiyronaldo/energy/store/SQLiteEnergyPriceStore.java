@@ -6,10 +6,7 @@ import java.sql.*;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Repositorio para la persistencia de datos de precios de energía en SQLite
@@ -66,6 +63,32 @@ public class SQLiteEnergyPriceStore implements EnergyPricesStore {
 	}
 
 	/**
+	 * Obtiene un mapa con todos los precios existentes en la BD
+	 * @return Mapa donde:
+	 *         - Clave: price_timestamp (String)
+	 *         - Valor: arreglo con [price_pvpc, price_spot] (double[])
+	 */
+	private Map<String, double[]> getExistingPriceMap(Connection conn) throws SQLException {
+		Map<String, double[]> priceMap = new HashMap<>();
+
+		String sql = "SELECT price_timestamp, price_pvpc, price_spot FROM energy_prices";
+
+		try (PreparedStatement pstmt = conn.prepareStatement(sql);
+			 ResultSet rs = pstmt.executeQuery()) {
+
+			while (rs.next()) {
+				String timestamp = rs.getString("price_timestamp");
+				double pvpc = rs.getDouble("price_pvpc");
+				double spot = rs.getDouble("price_spot");
+
+				priceMap.put(timestamp, new double[]{pvpc, spot});
+			}
+		}
+
+		return priceMap;
+	}
+
+	/**
 	 * Guarda o actualiza una lista de precios de energía
 	 * Implementa lógica diferencial para evitar actualizaciones innecesarias
 	 *
@@ -73,17 +96,17 @@ public class SQLiteEnergyPriceStore implements EnergyPricesStore {
 	 */
 	public void saveEnergyPrices(List<EnergyPrice> prices) {
 		if (prices == null || prices.isEmpty()) {
+			System.out.println("Lista de precios vacía - nada que guardar");
 			return;
 		}
 
 		try (Connection conn = getConnection()) {
-			// Desactivar auto-commit para operaciones más rápidas
 			conn.setAutoCommit(false);
 
-			// Consultar precios existentes con sus valores
-			Map<String, double[]> existingPrices = getExistingPricesWithValues(conn);
+			// 1. Obtener todos los registros existentes (timestamp + valores)
+			Map<String, double[]> existingPrices = getExistingPriceMap(conn);
 
-			// Preparar sentencias SQL para inserción y actualización
+			// 2. Preparar sentencias para INSERT y UPDATE
 			String insertSql = "INSERT INTO energy_prices " +
 					"(timestamp, price_timestamp, price_pvpc, price_spot) " +
 					"VALUES (?, ?, ?, ?)";
@@ -99,57 +122,72 @@ public class SQLiteEnergyPriceStore implements EnergyPricesStore {
 				int updates = 0;
 				int unchanged = 0;
 
-				// Procesar cada precio
-				for (EnergyPrice price : prices) {
-					String priceKey = price.getPriceTimestamp().toString();
+				for (EnergyPrice newPrice : prices) {
+					String timestampKey = newPrice.getPriceTimestamp().toString();
 
-					if (existingPrices.containsKey(priceKey)) {
-						double[] existingValues = existingPrices.get(priceKey);
-						double existingPvpc = existingValues[0];
-						double existingSpot = existingValues[1];
-
-						// Solo actualizar si alguno de los precios ha cambiado
-						boolean pvpcChanged = Math.abs(existingPvpc - price.getPricePVPC()) > 0.0001;
-						boolean spotChanged = Math.abs(existingSpot - price.getPriceSpot()) > 0.0001;
+					if (existingPrices.containsKey(timestampKey)) {
+						// REGISTRO EXISTENTE - Verificar si hay cambios
+						double[] existingValues = existingPrices.get(timestampKey);
+						boolean pvpcChanged = Math.abs(existingValues[0] - newPrice.getPricePVPC()) > 0.0001;
+						boolean spotChanged = Math.abs(existingValues[1] - newPrice.getPriceSpot()) > 0.0001;
 
 						if (pvpcChanged || spotChanged) {
-							updateStmt.setString(1, price.getTimestamp().toString());
-							updateStmt.setDouble(2, price.getPricePVPC());
-							updateStmt.setDouble(3, price.getPriceSpot());
-							updateStmt.setString(4, priceKey);
+							// ACTUALIZAR registro existente
+							updateStmt.setString(1, Instant.now().toString());
+							updateStmt.setDouble(2, newPrice.getPricePVPC());
+							updateStmt.setDouble(3, newPrice.getPriceSpot());
+							updateStmt.setString(4, timestampKey);
 							updateStmt.addBatch();
 							updates++;
 						} else {
 							unchanged++;
 						}
 					} else {
-						// Insertar nuevo precio
-						insertStmt.setString(1, price.getTimestamp().toString());
-						insertStmt.setString(2, priceKey);
-						insertStmt.setDouble(3, price.getPricePVPC());
-						insertStmt.setDouble(4, price.getPriceSpot());
+						// NUEVO REGISTRO - Insertar
+						insertStmt.setString(1, Instant.now().toString());
+						insertStmt.setString(2, timestampKey);
+						insertStmt.setDouble(3, newPrice.getPricePVPC());
+						insertStmt.setDouble(4, newPrice.getPriceSpot());
 						insertStmt.addBatch();
 						inserts++;
 					}
 				}
 
-				// Ejecutar los lotes de instrucciones
+				// Ejecutar ambas operaciones
 				insertStmt.executeBatch();
 				updateStmt.executeBatch();
-
-				// Confirmar la transacción
 				conn.commit();
 
-				System.out.println("Resumen de operaciones en precios: " +
-						inserts + " nuevos, " +
-						updates + " actualizados, " +
-						unchanged + " sin cambios.");
-
+				System.out.println("=== Resumen Guardado Diferencial ===");
+				System.out.println("Nuevos registros insertados: " + inserts);
+				System.out.println("Registros actualizados: " + updates);
+				System.out.println("Registros sin cambios: " + unchanged);
+				System.out.println("Total procesados: " + prices.size());
 			}
 		} catch (SQLException e) {
 			System.err.println("Error al guardar precios: " + e.getMessage());
 			e.printStackTrace();
 		}
+	}
+
+	// Método auxiliar para obtener solo los timestamps existentes
+	private Set<String> getExistingTimestamps(Connection conn) throws SQLException {
+		Set<String> timestamps = new HashSet<>();
+		String sql = "SELECT price_timestamp FROM energy_prices";
+
+		try (PreparedStatement pstmt = conn.prepareStatement(sql);
+			 ResultSet rs = pstmt.executeQuery()) {
+			while (rs.next()) {
+				timestamps.add(rs.getString("price_timestamp"));
+			}
+		}
+		return timestamps;
+	}
+
+	// Método auxiliar para comparar precios
+	private boolean hasPriceChanged(EnergyPrice lastPrice, EnergyPrice newPrice) {
+		return Math.abs(lastPrice.getPricePVPC() - newPrice.getPricePVPC()) > 0.0001 ||
+				Math.abs(lastPrice.getPriceSpot() - newPrice.getPriceSpot()) > 0.0001;
 	}
 
 	/**
