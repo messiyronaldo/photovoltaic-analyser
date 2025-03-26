@@ -89,7 +89,7 @@ public class SQLiteWeatherStore implements WeatherStore {
 			// Desactivar auto-commit para operaciones más rápidas
 			conn.setAutoCommit(false);
 
-			// Consultar pronósticos existentes para estas ubicaciones/timestamps
+			// Consultar pronósticos existentes con sus valores completos
 			Map<String, Weather> existingForecasts = getExistingForecasts(conn, weatherList);
 
 			// Preparar sentencias SQL para inserción y actualización
@@ -109,6 +109,10 @@ public class SQLiteWeatherStore implements WeatherStore {
 			try (PreparedStatement insertStmt = conn.prepareStatement(insertSql);
 				 PreparedStatement updateStmt = conn.prepareStatement(updateSql)) {
 
+				int inserts = 0;
+				int updates = 0;
+				int unchanged = 0;
+
 				// Procesar cada pronóstico
 				for (Weather weather : weatherList) {
 					Location location = weather.getLocation();
@@ -117,22 +121,30 @@ public class SQLiteWeatherStore implements WeatherStore {
 							weather.getPredictionTimestamp().toString();
 
 					if (existingForecasts.containsKey(predictionKey)) {
-						// Actualizar pronóstico existente
-						updateStmt.setString(1, weather.getTimestamp().toString());
-						updateStmt.setDouble(2, weather.getTemperature());
-						updateStmt.setInt(3, weather.getHumidity());
-						updateStmt.setInt(4, weather.getWeatherID());
-						updateStmt.setString(5, weather.getWeatherMain());
-						updateStmt.setString(6, weather.getWeatherDescription());
-						updateStmt.setInt(7, weather.getCloudiness());
-						updateStmt.setDouble(8, weather.getWindSpeed());
-						updateStmt.setDouble(9, weather.getRainVolume());
-						updateStmt.setDouble(10, weather.getSnowVolume());
-						updateStmt.setString(11, weather.getPartOfDay());
-						updateStmt.setDouble(12, location.getLatitude());
-						updateStmt.setDouble(13, location.getLongitude());
-						updateStmt.setString(14, weather.getPredictionTimestamp().toString());
-						updateStmt.addBatch();
+						// Tenemos datos existentes, comparar para ver si necesitamos actualizar
+						Weather existingWeather = existingForecasts.get(predictionKey);
+
+						if (needsUpdate(existingWeather, weather)) {
+							// Actualizar pronóstico existente si hay cambios
+							updateStmt.setString(1, weather.getTimestamp().toString());
+							updateStmt.setDouble(2, weather.getTemperature());
+							updateStmt.setInt(3, weather.getHumidity());
+							updateStmt.setInt(4, weather.getWeatherID());
+							updateStmt.setString(5, weather.getWeatherMain());
+							updateStmt.setString(6, weather.getWeatherDescription());
+							updateStmt.setInt(7, weather.getCloudiness());
+							updateStmt.setDouble(8, weather.getWindSpeed());
+							updateStmt.setDouble(9, weather.getRainVolume());
+							updateStmt.setDouble(10, weather.getSnowVolume());
+							updateStmt.setString(11, weather.getPartOfDay());
+							updateStmt.setDouble(12, location.getLatitude());
+							updateStmt.setDouble(13, location.getLongitude());
+							updateStmt.setString(14, weather.getPredictionTimestamp().toString());
+							updateStmt.addBatch();
+							updates++;
+						} else {
+							unchanged++;
+						}
 					} else {
 						// Insertar nuevo pronóstico
 						insertStmt.setString(1, weather.getTimestamp().toString());
@@ -151,21 +163,58 @@ public class SQLiteWeatherStore implements WeatherStore {
 						insertStmt.setDouble(14, weather.getSnowVolume());
 						insertStmt.setString(15, weather.getPartOfDay());
 						insertStmt.addBatch();
+						inserts++;
 					}
 				}
 
-				// Ejecutar los lotes de instrucciones
-				insertStmt.executeBatch();
-				updateStmt.executeBatch();
+				// Ejecutar los lotes de instrucciones solo si hay cambios
+				if (inserts > 0) {
+					insertStmt.executeBatch();
+				}
+
+				if (updates > 0) {
+					updateStmt.executeBatch();
+				}
+
+				// Confirmar la transacción
+				conn.commit();
+
+				System.out.println("Resumen de operaciones en pronósticos: " +
+						inserts + " nuevos, " +
+						updates + " actualizados, " +
+						unchanged + " sin cambios.");
+
 			}
-
-			// Confirmar la transacción
-			conn.commit();
-
 		} catch (SQLException e) {
 			System.err.println("Error al guardar pronósticos: " + e.getMessage());
 			e.printStackTrace();
 		}
+	}
+
+	/**
+	 * Compara si dos pronósticos tienen diferencias significativas que requieren actualización
+	 *
+	 * @param existing Pronóstico existente en la base de datos
+	 * @param newWeather Nuevo pronóstico a comparar
+	 * @return true si hay diferencias que justifiquen una actualización
+	 */
+	private boolean needsUpdate(Weather existing, Weather newWeather) {
+		// Comprobar cambios en valores numéricos con tolerancia
+		if (existing.getTemperature() != newWeather.getTemperature()) return true;
+		if (existing.getHumidity() != newWeather.getHumidity()) return true;
+		if (existing.getWeatherID() != newWeather.getWeatherID()) return true;
+		if (existing.getWindSpeed() != newWeather.getWindSpeed()) return true;
+		if (existing.getRainVolume() != newWeather.getRainVolume()) return true;
+		if (existing.getSnowVolume() != newWeather.getSnowVolume()) return true;
+		if (existing.getCloudiness() != newWeather.getCloudiness()) return true;
+
+		// Comprobar cambios en strings
+		if (!existing.getWeatherMain().equals(newWeather.getWeatherMain())) return true;
+		if (!existing.getWeatherDescription().equals(newWeather.getWeatherDescription())) return true;
+		if (!existing.getPartOfDay().equals(newWeather.getPartOfDay())) return true;
+
+		// No hay cambios significativos
+		return false;
 	}
 
 	/**
@@ -195,28 +244,51 @@ public class SQLiteWeatherStore implements WeatherStore {
 			double latitude = Double.parseDouble(parts[0]);
 			double longitude = Double.parseDouble(parts[1]);
 
-			if (placeholders.length() > 0) placeholders.append(" OR ");
+			if (!placeholders.isEmpty()) placeholders.append(" OR ");
 			placeholders.append("(latitude = ? AND longitude = ?)");
 			params.add(latitude);
 			params.add(longitude);
 		}
 
-		String sql = "SELECT latitude, longitude, prediction_timestamp FROM weather_forecasts WHERE " + placeholders;
+		String sql = "SELECT * FROM weather_forecasts WHERE " + placeholders;
 
-		try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+		try (PreparedStatement preparedStatement = conn.prepareStatement(sql)) {
 			// Configurar parámetros
 			for (int i = 0; i < params.size(); i++) {
-				pstmt.setObject(i + 1, params.get(i));
+				preparedStatement.setObject(i + 1, params.get(i));
 			}
 
-			try (ResultSet rs = pstmt.executeQuery()) {
-				while (rs.next()) {
-					double latitude = rs.getDouble("latitude");
-					double longitude = rs.getDouble("longitude");
-					String predictionTimestamp = rs.getString("prediction_timestamp");
+			try (ResultSet resultSet = preparedStatement.executeQuery()) {
+				while (resultSet.next()) {
+					// Reconstruir objetos completos
+					Location location = new Location(
+							resultSet.getString("location_name"),
+							resultSet.getDouble("latitude"),
+							resultSet.getDouble("longitude")
+					);
 
-					String key = latitude + "|" + longitude + "|" + predictionTimestamp;
-					forecasts.put(key, null); // Solo necesitamos las claves
+					Weather weather = new Weather(
+							Instant.parse(resultSet.getString("timestamp")),
+							location,
+							Instant.parse(resultSet.getString("prediction_timestamp")),
+							resultSet.getDouble("temperature"),
+							resultSet.getInt("humidity"),
+							resultSet.getInt("weather_id"),
+							resultSet.getString("weather_main"),
+							resultSet.getString("weather_description"),
+							resultSet.getInt("cloudiness"),
+							resultSet.getDouble("wind_speed"),
+							resultSet.getDouble("rain_volume"),
+							resultSet.getDouble("snow_volume"),
+							resultSet.getString("part_of_day")
+					);
+
+					// Usar la misma clave compuesta
+					String key = location.getLatitude() + "|" +
+							location.getLongitude() + "|" +
+							weather.getPredictionTimestamp().toString();
+
+					forecasts.put(key, weather);
 				}
 			}
 		}
@@ -240,32 +312,32 @@ public class SQLiteWeatherStore implements WeatherStore {
 							"WHERE latitude = ? AND longitude = ? " +
 							"ORDER BY prediction_timestamp";
 
-			try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-				pstmt.setDouble(1, latitude);
-				pstmt.setDouble(2, longitude);
+			try (PreparedStatement preparedStatement = conn.prepareStatement(sql)) {
+				preparedStatement.setDouble(1, latitude);
+				preparedStatement.setDouble(2, longitude);
 
-				try (ResultSet rs = pstmt.executeQuery()) {
-					while (rs.next()) {
+				try (ResultSet resultSet = preparedStatement.executeQuery()) {
+					while (resultSet.next()) {
 						Location location = new Location(
-								rs.getString("location_name"),
-								rs.getDouble("latitude"),
-								rs.getDouble("longitude")
+								resultSet.getString("location_name"),
+								resultSet.getDouble("latitude"),
+								resultSet.getDouble("longitude")
 						);
 
 						Weather weather = new Weather(
-								Instant.parse(rs.getString("timestamp")),
+								Instant.parse(resultSet.getString("timestamp")),
 								location,
-								Instant.parse(rs.getString("prediction_timestamp")),
-								rs.getDouble("temperature"),
-								rs.getInt("humidity"),
-								rs.getInt("weather_id"),
-								rs.getString("weather_main"),
-								rs.getString("weather_description"),
-								rs.getInt("cloudiness"),
-								rs.getDouble("wind_speed"),
-								rs.getDouble("rain_volume"),
-								rs.getDouble("snow_volume"),
-								rs.getString("part_of_day")
+								Instant.parse(resultSet.getString("prediction_timestamp")),
+								resultSet.getDouble("temperature"),
+								resultSet.getInt("humidity"),
+								resultSet.getInt("weather_id"),
+								resultSet.getString("weather_main"),
+								resultSet.getString("weather_description"),
+								resultSet.getInt("cloudiness"),
+								resultSet.getDouble("wind_speed"),
+								resultSet.getDouble("rain_volume"),
+								resultSet.getDouble("snow_volume"),
+								resultSet.getString("part_of_day")
 						);
 
 						forecasts.add(weather);
