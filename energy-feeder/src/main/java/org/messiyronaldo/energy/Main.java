@@ -1,24 +1,28 @@
 package org.messiyronaldo.energy;
 
-import org.messiyronaldo.energy.control.EnergySystemManager;
+import org.messiyronaldo.energy.control.*;
 
 public class Main {
     public static void main(String[] args) {
-        EnergySystemManager manager = new EnergySystemManager();
-        manager.start();
+        EnergyPricesProvider energyProvider = new REEEnergyProvider();
+        EnergyPricesStore energyStore = new SQLiteEnergyPriceStore("photovoltaic-data.db");
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            manager.stop();
-            System.out.println("Sistema de energía detenido.");
-        }));
+        final long updateIntervalMinutes = 60 * 12;
 
-        while (true) {
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
+        System.out.println("Iniciando monitoreo de precios de energía");
+
+        EnergyController energyController = new EnergyController(
+                energyProvider, energyStore, updateIntervalMinutes);
+
+        System.out.println("Controlador de precios de energía iniciado");
+        System.out.println("Aplicación en ejecución. Los datos se actualizarán cada " +
+                updateIntervalMinutes + " minutos.");
+
+        // Mantener la aplicación en ejecución
+        try {
+            Thread.currentThread().join();
+        } catch (InterruptedException e) {
+            System.out.println("Aplicación finalizada.");
         }
     }
 }
