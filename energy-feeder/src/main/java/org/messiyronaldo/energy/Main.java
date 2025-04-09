@@ -3,26 +3,46 @@ package org.messiyronaldo.energy;
 import org.messiyronaldo.energy.control.*;
 
 public class Main {
+    private static final long UPDATE_INTERVAL_MINUTES = 60 * 12; // 12 hours
+    private static final String DATABASE_FILENAME = "photovoltaic-data.db";
+    private static EnergyController energyController;
+
     public static void main(String[] args) {
         EnergyPricesProvider energyProvider = new REEEnergyProvider();
-        EnergyPricesStore energyStore = new SQLiteEnergyPriceStore("photovoltaic-data.db");
+        EnergyPricesStore energyStore = new SQLiteEnergyPriceStore(DATABASE_FILENAME);
 
-        final long updateIntervalMinutes = 60 * 12;
+        System.out.println("Starting energy price monitoring");
 
-        System.out.println("Iniciando monitoreo de precios de energía");
+        energyController = new EnergyController(
+                energyProvider, energyStore, UPDATE_INTERVAL_MINUTES);
 
-        EnergyController energyController = new EnergyController(
-                energyProvider, energyStore, updateIntervalMinutes);
+        System.out.println("Energy price controller started");
+        System.out.println("Application running. Data will update every " +
+                UPDATE_INTERVAL_MINUTES + " minutes.");
 
-        System.out.println("Controlador de precios de energía iniciado");
-        System.out.println("Aplicación en ejecución. Los datos se actualizarán cada " +
-                updateIntervalMinutes + " minutos.");
+        registerShutdownHook();
+        keepApplicationRunning();
+    }
 
-        // Mantener la aplicación en ejecución
+    private static void registerShutdownHook() {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("Shutting down energy-feeder application...");
+            shutdownController();
+        }));
+    }
+
+    private static void shutdownController() {
+        if (energyController != null) {
+            energyController.shutdown();
+            System.out.println("Energy controller shut down successfully");
+        }
+    }
+
+    private static void keepApplicationRunning() {
         try {
             Thread.currentThread().join();
         } catch (InterruptedException e) {
-            System.out.println("Aplicación finalizada.");
+            System.out.println("Application terminated.");
         }
     }
 }

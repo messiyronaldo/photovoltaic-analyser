@@ -7,12 +7,14 @@ public class EnergyPrice {
 	private final Instant priceTimestamp;
 	private final double pricePVPC;
 	private final double priceSpot;
+	private final String sourceSystem;
 
-	public EnergyPrice(Instant timestamp, Instant priceTimestamp, double pricePVPC, double priceSpot) {
+	public EnergyPrice(Instant timestamp, Instant priceTimestamp, double pricePVPC, double priceSpot, String sourceSystem) {
 		this.timestamp = timestamp;
 		this.priceTimestamp = priceTimestamp;
 		this.pricePVPC = pricePVPC;
 		this.priceSpot = priceSpot;
+		this.sourceSystem = sourceSystem;
 	}
 
 	public Instant getTimestamp() {
@@ -31,6 +33,10 @@ public class EnergyPrice {
 		return priceSpot;
 	}
 
+	public String getSourceSystem() {
+		return sourceSystem;
+	}
+
 	@Override
 	public String toString() {
 		return "EnergyPrice{" +
@@ -38,6 +44,7 @@ public class EnergyPrice {
 				", priceTimestamp=" + priceTimestamp +
 				", pricePVPC=" + pricePVPC +
 				", priceSpot=" + priceSpot +
+				", sourceSystem='" + sourceSystem + '\'' +
 				'}';
 	}
 }

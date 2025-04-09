@@ -7,70 +7,59 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-/**
- * Repositorio para la persistencia de datos de precios de energía en SQLite
- */
 public class SQLiteEnergyPriceStore implements EnergyPricesStore {
+	private static final Logger logger = Logger.getLogger(SQLiteEnergyPriceStore.class.getName());
+	private static final ZoneId SPAIN_ZONE_ID = ZoneId.of("Europe/Madrid");
+	private static final double PRICE_COMPARISON_TOLERANCE = 0.0001;
+
 	private final String dbPath;
 
-	/**
-	 * Constructor con la ruta de la base de datos
-	 *
-	 * @param dbPath Ruta del archivo de base de datos SQLite
-	 */
 	public SQLiteEnergyPriceStore(String dbPath) {
 		this.dbPath = dbPath;
 		initializeDatabase();
 	}
 
-	/**
-	 * Inicializa la base de datos creando las tablas necesarias si no existen
-	 */
 	private void initializeDatabase() {
 		try (Connection conn = getConnection()) {
-			// Crear tabla de precios de energía
-			try (Statement stmt = conn.createStatement()) {
-				stmt.execute(
-						"CREATE TABLE IF NOT EXISTS energy_prices (" +
-								"id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-								"timestamp TEXT NOT NULL, " +
-								"price_timestamp TEXT NOT NULL, " +
-								"price_pvpc REAL NOT NULL, " +
-								"price_spot REAL NOT NULL, " +
-								"UNIQUE(price_timestamp)" +
-								")"
-				);
-			}
+			createTables(conn);
 		} catch (SQLException e) {
-			System.err.println("Error al inicializar la base de datos: " + e.getMessage());
-			throw new RuntimeException("Error al inicializar la base de datos", e);
+			logError("Error initializing database", e);
+			throw new RuntimeException("Failed to initialize database", e);
 		}
 	}
 
-	/**
-	 * Obtiene una conexión a la base de datos
-	 */
+	private void createTables(Connection conn) throws SQLException {
+		try (Statement stmt = conn.createStatement()) {
+			stmt.execute(createPricesTableSql());
+		}
+	}
+
+	private String createPricesTableSql() {
+		return "CREATE TABLE IF NOT EXISTS energy_prices (" +
+				"id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+				"timestamp TEXT NOT NULL, " +
+				"price_timestamp TEXT NOT NULL, " +
+				"price_pvpc REAL NOT NULL, " +
+				"price_spot REAL NOT NULL, " +
+				"source_system TEXT NOT NULL, " +
+				"UNIQUE(price_timestamp)" +
+				")";
+	}
+
 	private Connection getConnection() throws SQLException {
 		try {
-			// Cargar el driver de SQLite
 			Class.forName("org.sqlite.JDBC");
-			// Crear conexión
 			return DriverManager.getConnection("jdbc:sqlite:" + dbPath);
 		} catch (ClassNotFoundException e) {
-			throw new SQLException("Driver de SQLite no encontrado", e);
+			throw new SQLException("SQLite driver not found", e);
 		}
 	}
 
-	/**
-	 * Obtiene un mapa con todos los precios existentes en la BD
-	 * @return Mapa donde:
-	 *         - Clave: price_timestamp (String)
-	 *         - Valor: arreglo con [price_pvpc, price_spot] (double[])
-	 */
 	private Map<String, double[]> getExistingPriceMap(Connection conn) throws SQLException {
 		Map<String, double[]> priceMap = new HashMap<>();
-
 		String sql = "SELECT price_timestamp, price_pvpc, price_spot FROM energy_prices";
 
 		try (PreparedStatement pstmt = conn.prepareStatement(sql);
@@ -88,184 +77,186 @@ public class SQLiteEnergyPriceStore implements EnergyPricesStore {
 		return priceMap;
 	}
 
-	/**
-	 * Guarda o actualiza una lista de precios de energía
-	 * Implementa lógica diferencial para evitar actualizaciones innecesarias
-	 *
-	 * @param prices Lista de precios a guardar
-	 */
+	@Override
 	public void saveEnergyPrices(List<EnergyPrice> prices) {
-		if (prices == null || prices.isEmpty()) {
-			System.out.println("Lista de precios vacía - nada que guardar");
+		if (isEmpty(prices)) {
+			System.out.println("Empty price list - nothing to save");
 			return;
 		}
 
 		try (Connection conn = getConnection()) {
-			conn.setAutoCommit(false);
-
-			// 1. Obtener todos los registros existentes (timestamp + valores)
-			Map<String, double[]> existingPrices = getExistingPriceMap(conn);
-
-			// 2. Preparar sentencias para INSERT y UPDATE
-			String insertSql = "INSERT INTO energy_prices " +
-					"(timestamp, price_timestamp, price_pvpc, price_spot) " +
-					"VALUES (?, ?, ?, ?)";
-
-			String updateSql = "UPDATE energy_prices SET " +
-					"timestamp = ?, price_pvpc = ?, price_spot = ? " +
-					"WHERE price_timestamp = ?";
-
-			try (PreparedStatement insertStmt = conn.prepareStatement(insertSql);
-				 PreparedStatement updateStmt = conn.prepareStatement(updateSql)) {
-
-				int inserts = 0;
-				int updates = 0;
-				int unchanged = 0;
-
-				for (EnergyPrice newPrice : prices) {
-					String timestampKey = newPrice.getPriceTimestamp().toString();
-
-					if (existingPrices.containsKey(timestampKey)) {
-						// REGISTRO EXISTENTE - Verificar si hay cambios
-						double[] existingValues = existingPrices.get(timestampKey);
-						boolean pvpcChanged = Math.abs(existingValues[0] - newPrice.getPricePVPC()) > 0.0001;
-						boolean spotChanged = Math.abs(existingValues[1] - newPrice.getPriceSpot()) > 0.0001;
-
-						if (pvpcChanged || spotChanged) {
-							// ACTUALIZAR registro existente
-							updateStmt.setString(1, Instant.now().toString());
-							updateStmt.setDouble(2, newPrice.getPricePVPC());
-							updateStmt.setDouble(3, newPrice.getPriceSpot());
-							updateStmt.setString(4, timestampKey);
-							updateStmt.addBatch();
-							updates++;
-						} else {
-							unchanged++;
-						}
-					} else {
-						// NUEVO REGISTRO - Insertar
-						insertStmt.setString(1, Instant.now().toString());
-						insertStmt.setString(2, timestampKey);
-						insertStmt.setDouble(3, newPrice.getPricePVPC());
-						insertStmt.setDouble(4, newPrice.getPriceSpot());
-						insertStmt.addBatch();
-						inserts++;
-					}
-				}
-
-				// Ejecutar ambas operaciones
-				insertStmt.executeBatch();
-				updateStmt.executeBatch();
-				conn.commit();
-
-				System.out.println("=== Resumen Guardado Diferencial ===");
-				System.out.println("Nuevos registros insertados: " + inserts);
-				System.out.println("Registros actualizados: " + updates);
-				System.out.println("Registros sin cambios: " + unchanged);
-				System.out.println("Total procesados: " + prices.size());
-			}
+			processPriceUpdates(conn, prices);
 		} catch (SQLException e) {
-			System.err.println("Error al guardar precios: " + e.getMessage());
-			e.printStackTrace();
+			logError("Error saving prices", e);
 		}
 	}
 
-	// Método auxiliar para obtener solo los timestamps existentes
-	private Set<String> getExistingTimestamps(Connection conn) throws SQLException {
-		Set<String> timestamps = new HashSet<>();
-		String sql = "SELECT price_timestamp FROM energy_prices";
+	private boolean isEmpty(List<EnergyPrice> prices) {
+		return prices == null || prices.isEmpty();
+	}
 
-		try (PreparedStatement pstmt = conn.prepareStatement(sql);
-			 ResultSet rs = pstmt.executeQuery()) {
-			while (rs.next()) {
-				timestamps.add(rs.getString("price_timestamp"));
+	private void processPriceUpdates(Connection conn, List<EnergyPrice> prices) throws SQLException {
+		conn.setAutoCommit(false);
+
+		try {
+			Map<String, double[]> existingPrices = getExistingPriceMap(conn);
+			int[] counts = executeUpdates(conn, prices, existingPrices);
+
+			conn.commit();
+			logOperationSummary(counts[0], counts[1], counts[2], prices.size());
+		} catch (SQLException e) {
+			conn.rollback();
+			throw e;
+		} finally {
+			conn.setAutoCommit(true);
+		}
+	}
+
+	private int[] executeUpdates(Connection conn, List<EnergyPrice> prices,
+								 Map<String, double[]> existingPrices) throws SQLException {
+		String insertSql = createInsertSql();
+		String updateSql = createUpdateSql();
+
+		try (PreparedStatement insertStmt = conn.prepareStatement(insertSql);
+			 PreparedStatement updateStmt = conn.prepareStatement(updateSql)) {
+
+			return processPriceBatch(insertStmt, updateStmt, prices, existingPrices);
+		}
+	}
+
+	private String createInsertSql() {
+		return "INSERT INTO energy_prices " +
+				"(timestamp, price_timestamp, price_pvpc, price_spot, source_system) " +
+				"VALUES (?, ?, ?, ?, ?)";
+	}
+
+	private String createUpdateSql() {
+		return "UPDATE energy_prices SET " +
+				"timestamp = ?, price_pvpc = ?, price_spot = ? " +
+				"WHERE price_timestamp = ?";
+	}
+
+	private int[] processPriceBatch(PreparedStatement insertStmt, PreparedStatement updateStmt,
+									List<EnergyPrice> prices, Map<String, double[]> existingPrices)
+			throws SQLException {
+		int inserts = 0;
+		int updates = 0;
+		int unchanged = 0;
+
+		for (EnergyPrice price : prices) {
+			String timestampKey = price.getPriceTimestamp().toString();
+
+			if (existingPrices.containsKey(timestampKey)) {
+				if (hasPriceChanged(existingPrices.get(timestampKey), price)) {
+					addToUpdateBatch(updateStmt, price, timestampKey);
+					updates++;
+				} else {
+					unchanged++;
+				}
+			} else {
+				addToInsertBatch(insertStmt, price, timestampKey);
+				inserts++;
 			}
 		}
-		return timestamps;
+
+		executeNonEmptyBatch(insertStmt, inserts);
+		executeNonEmptyBatch(updateStmt, updates);
+
+		return new int[]{inserts, updates, unchanged};
 	}
 
-	// Método auxiliar para comparar precios
-	private boolean hasPriceChanged(EnergyPrice lastPrice, EnergyPrice newPrice) {
-		return Math.abs(lastPrice.getPricePVPC() - newPrice.getPricePVPC()) > 0.0001 ||
-				Math.abs(lastPrice.getPriceSpot() - newPrice.getPriceSpot()) > 0.0001;
-	}
-
-	/**
-	 * Recupera precios existentes con sus valores de PVPC y Spot
-	 */
-	private Map<String, double[]> getExistingPricesWithValues(Connection conn) throws SQLException {
-		Map<String, double[]> prices = new HashMap<>();
-
-		String sql = "SELECT price_timestamp, price_pvpc, price_spot FROM energy_prices";
-		try (PreparedStatement pstmt = conn.prepareStatement(sql);
-			 ResultSet rs = pstmt.executeQuery()) {
-
-			while (rs.next()) {
-				String priceTimestamp = rs.getString("price_timestamp");
-				double pricePvpc = rs.getDouble("price_pvpc");
-				double priceSpot = rs.getDouble("price_spot");
-
-				double[] priceValues = new double[] {pricePvpc, priceSpot};
-				prices.put(priceTimestamp, priceValues);
-			}
+	private void executeNonEmptyBatch(PreparedStatement stmt, int count) throws SQLException {
+		if (count > 0) {
+			stmt.executeBatch();
 		}
-
-		return prices;
 	}
 
-	/**
-	 * Obtiene los precios para un rango de fechas
-	 *
-	 * @param startTime Timestamp inicial
-	 * @param endTime Timestamp final
-	 * @return Lista de precios que cumplen los criterios
-	 */
+	private boolean hasPriceChanged(double[] existingValues, EnergyPrice newPrice) {
+		boolean pvpcChanged = Math.abs(existingValues[0] - newPrice.getPricePVPC()) > PRICE_COMPARISON_TOLERANCE;
+		boolean spotChanged = Math.abs(existingValues[1] - newPrice.getPriceSpot()) > PRICE_COMPARISON_TOLERANCE;
+
+		return pvpcChanged || spotChanged;
+	}
+
+	private void addToInsertBatch(PreparedStatement stmt, EnergyPrice price, String timestampKey)
+			throws SQLException {
+		stmt.setString(1, Instant.now().toString());
+		stmt.setString(2, timestampKey);
+		stmt.setDouble(3, price.getPricePVPC());
+		stmt.setDouble(4, price.getPriceSpot());
+		stmt.setString(5, price.getSourceSystem());
+		stmt.addBatch();
+	}
+
+	private void addToUpdateBatch(PreparedStatement stmt, EnergyPrice price, String timestampKey)
+			throws SQLException {
+		stmt.setString(1, Instant.now().toString());
+		stmt.setDouble(2, price.getPricePVPC());
+		stmt.setDouble(3, price.getPriceSpot());
+		stmt.setString(4, timestampKey);
+		stmt.addBatch();
+	}
+
+	private void logOperationSummary(int inserts, int updates, int unchanged, int total) {
+		System.out.println("=== Differential Save Summary ===");
+		System.out.println("New records inserted: " + inserts);
+		System.out.println("Records updated: " + updates);
+		System.out.println("Records unchanged: " + unchanged);
+		System.out.println("Total processed: " + total);
+	}
+
+	@Override
 	public List<EnergyPrice> getEnergyPrices(Instant startTime, Instant endTime) {
 		List<EnergyPrice> prices = new ArrayList<>();
 
 		try (Connection conn = getConnection()) {
-			String sql =
-					"SELECT * FROM energy_prices " +
-							"WHERE price_timestamp >= ? AND price_timestamp <= ? " +
-							"ORDER BY price_timestamp";
-
-			try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-				pstmt.setString(1, startTime.toString());
-				pstmt.setString(2, endTime.toString());
-
-				try (ResultSet rs = pstmt.executeQuery()) {
-					while (rs.next()) {
-						EnergyPrice price = new EnergyPrice(
-								Instant.parse(rs.getString("timestamp")),
-								Instant.parse(rs.getString("price_timestamp")),
-								rs.getDouble("price_pvpc"),
-								rs.getDouble("price_spot")
-						);
-
-						prices.add(price);
-					}
-				}
-			}
+			prices = queryPricesByTimeRange(conn, startTime, endTime);
 		} catch (SQLException e) {
-			System.err.println("Error al obtener precios: " + e.getMessage());
-			e.printStackTrace();
+			logError("Error retrieving prices", e);
 		}
 
 		return prices;
 	}
 
-	/**
-	 * Obtiene los precios para un día específico
-	 *
-	 * @param date Fecha para la que se quieren obtener los precios
-	 * @return Lista de precios del día solicitado
-	 */
+	private List<EnergyPrice> queryPricesByTimeRange(Connection conn, Instant startTime, Instant endTime)
+			throws SQLException {
+		List<EnergyPrice> prices = new ArrayList<>();
+		String sql = "SELECT * FROM energy_prices " +
+				"WHERE price_timestamp >= ? AND price_timestamp <= ? " +
+				"ORDER BY price_timestamp";
+
+		try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+			pstmt.setString(1, startTime.toString());
+			pstmt.setString(2, endTime.toString());
+
+			try (ResultSet rs = pstmt.executeQuery()) {
+				while (rs.next()) {
+					prices.add(createPriceFromResultSet(rs));
+				}
+			}
+		}
+
+		return prices;
+	}
+
+	private EnergyPrice createPriceFromResultSet(ResultSet rs) throws SQLException {
+		return new EnergyPrice(
+				Instant.parse(rs.getString("timestamp")),
+				Instant.parse(rs.getString("price_timestamp")),
+				rs.getDouble("price_pvpc"),
+				rs.getDouble("price_spot"),
+				rs.getString("source_system")
+		);
+	}
+
 	public List<EnergyPrice> getEnergyPricesByDate(LocalDate date) {
-		// Convertir LocalDate a Instant para el inicio y fin del día
-		ZoneId zoneId = ZoneId.of("Europe/Madrid");
-		Instant startOfDay = date.atStartOfDay(zoneId).toInstant();
-		Instant endOfDay = date.plusDays(1).atStartOfDay(zoneId).minusSeconds(1).toInstant();
+		Instant startOfDay = date.atStartOfDay(SPAIN_ZONE_ID).toInstant();
+		Instant endOfDay = date.plusDays(1).atStartOfDay(SPAIN_ZONE_ID).minusSeconds(1).toInstant();
 
 		return getEnergyPrices(startOfDay, endOfDay);
+	}
+
+	private void logError(String message, Exception e) {
+		logger.log(Level.SEVERE, message, e);
 	}
 }
