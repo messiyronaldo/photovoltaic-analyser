@@ -3,6 +3,7 @@ package org.messiyronaldo.weather;
 import org.messiyronaldo.weather.control.*;
 import org.messiyronaldo.weather.model.Location;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -11,6 +12,7 @@ public class Main {
 	private static final long UPDATE_INTERVAL_MINUTES = 60 * 6;
 	private static final String DATABASE_FILENAME = "photovoltaic-data.db";
 	private static final int CONTROLLER_START_DELAY_SECONDS = 3;
+	private static final List<WeatherController> controllers = new ArrayList<>();
 
 	public static void main(String[] args) {
 		validateArguments(args);
@@ -46,7 +48,8 @@ public class Main {
 		System.out.println("Starting weather monitoring for " + locations.size() + " locations");
 
 		for (Location location : locations) {
-			new WeatherController(location, provider, store, UPDATE_INTERVAL_MINUTES);
+			WeatherController controller = new WeatherController(location, provider, store, UPDATE_INTERVAL_MINUTES);
+			controllers.add(controller);
 			System.out.println("Controller started for: " + location.getName());
 			delayBetweenControllers();
 		}
@@ -66,7 +69,15 @@ public class Main {
 	private static void registerShutdownHook() {
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
 			System.out.println("Shutting down weather-feeder application...");
+			shutdownAllControllers();
 		}));
+	}
+
+	private static void shutdownAllControllers() {
+		for (WeatherController controller : controllers) {
+			controller.shutdown();
+		}
+		System.out.println("All weather controllers shut down successfully");
 	}
 
 	private static void keepApplicationRunning() {

@@ -53,4 +53,11 @@ public class WeatherController {
 	private void logUpdateError(Exception e) {
 		System.err.println("Error retrieving weather data: " + e.getMessage());
 	}
+
+	public void shutdown() {
+		if (timer != null) {
+			timer.cancel();
+			System.out.println("Weather controller for " + location.getName() + " stopped");
+		}
+	}
 }
