@@ -19,7 +19,7 @@ public class WeatherController {
 		this.weatherProvider = weatherProvider;
 		this.weatherStore = weatherStore;
 
-		this.timer = new Timer("WeatherUpdateTimer", false);
+		this.timer = new Timer("WeatherUpdate-" + location.getName(), false);
 		timer.scheduleAtFixedRate(new TimerTask() {
 			@Override
 			public void run() {

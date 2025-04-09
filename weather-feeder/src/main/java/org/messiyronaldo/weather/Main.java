@@ -5,6 +5,7 @@ import org.messiyronaldo.weather.model.Location;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 public class Main {
 	public static void main(String[] args) {
@@ -25,29 +26,23 @@ public class Main {
 
 		System.out.println("Iniciando monitoreo de datos meteorológicos para " + locations.size() + " ubicaciones");
 
-		for (int i = 0; i < locations.size(); i++) {
-			Location location = locations.get(i);
-
-			// Crear el controlador
-			WeatherController weatherController = new WeatherController(
-					location, weatherProvider, weatherStore, updateIntervalMinutes);
-
+		for (Location location : locations) {
+			new WeatherController(location, weatherProvider, weatherStore, updateIntervalMinutes);
 			System.out.println("Controlador iniciado para: " + location.getName());
 
-			// Pequeña pausa entre inicializaciones para evitar accesos simultáneos
-			if (i < locations.size() - 1) {
-				try {
-					// Esperar 10 segundos entre inicializaciones
-					Thread.sleep(10000);
-				} catch (InterruptedException e) {
-					Thread.currentThread().interrupt();
-				}
+			try {
+				TimeUnit.SECONDS.sleep(3);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
 			}
 		}
 
 		System.out.println("Aplicación en ejecución. Los datos se actualizarán cada " + updateIntervalMinutes + " minutos.");
 
-		// Mantener la aplicación en ejecución
+		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+			System.out.println("Cerrando aplicación weather-feeder...");
+		}));
+
 		try {
 			Thread.currentThread().join();
 		} catch (InterruptedException e) {
