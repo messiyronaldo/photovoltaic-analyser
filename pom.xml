@@ -13,7 +13,6 @@
     <description>Sistema de análisis fotovoltaico con datos meteorológicos y precios de energía</description>
 
     <modules>
-        <module>app</module>
         <module>energy-feeder</module>
         <module>weather-feeder</module>
     </modules>
