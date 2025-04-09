@@ -53,171 +53,163 @@ public class OpenWeatherProvider implements WeatherProvider {
 	}
 
 	private String fetchWeatherDataFromApi(String apiUrl) throws IOException {
-		Request httpRequest = createHttpGetRequest(apiUrl);
-		return executeHttpRequestAndGetResponseBody(httpRequest);
-	}
-
-	private Request createHttpGetRequest(String url) {
-		return new Request.Builder()
-				.url(url)
-				.build();
+		Request request = new Request.Builder().url(apiUrl).build();
+		return executeHttpRequestAndGetResponseBody(request);
 	}
 
 	private String executeHttpRequestAndGetResponseBody(Request request) throws IOException {
 		try (Response response = httpClient.newCall(request).execute()) {
-			validateHttpResponse(response);
-
-			if (response.body() == null) {
-				throw new IOException("API response body is null");
-			}
-
-			return response.body().string();
+			validateResponse(response);
+			return extractResponseBody(response);
 		}
 	}
 
-	private void validateHttpResponse(Response response) throws IOException {
+	private void validateResponse(Response response) throws IOException {
 		if (!response.isSuccessful()) {
-			throw new IOException("API response error: " + response.code() + " " + response.message());
+			throw new IOException("API error: " + response.code() + " " + response.message());
 		}
+	}
+
+	private String extractResponseBody(Response response) throws IOException {
+		if (response.body() == null) {
+			throw new IOException("API response body is null");
+		}
+		return response.body().string();
 	}
 
 	static class JsonWeatherParser {
 		private final Gson jsonParser = new Gson();
 
 		public List<Weather> parseWeatherData(String jsonData, Location location) {
-			JsonObject rootJsonObject = parseJsonString(jsonData);
+			JsonObject rootObject = jsonParser.fromJson(jsonData, JsonObject.class);
 			List<Weather> forecastList = new ArrayList<>();
-			extractForecastsFromJson(rootJsonObject, location, forecastList);
+			extractForecasts(rootObject, location, forecastList);
 			return forecastList;
 		}
 
-		private JsonObject parseJsonString(String jsonData) {
-			return jsonParser.fromJson(jsonData, JsonObject.class);
-		}
-
-		private void extractForecastsFromJson(JsonObject rootJsonObject, Location location, List<Weather> weatherResults) {
-			Instant dataRetrievalTime = Instant.now();
-			JsonArray forecastEntries = rootJsonObject.getAsJsonArray("list");
+		private void extractForecasts(JsonObject rootObject, Location location, List<Weather> results) {
+			Instant retrievalTime = Instant.now();
+			JsonArray forecastEntries = rootObject.getAsJsonArray("list");
 
 			for (JsonElement forecastElement : forecastEntries) {
 				JsonObject forecastEntry = forecastElement.getAsJsonObject();
-				Weather weatherForecast = convertJsonObjectToWeather(forecastEntry, location, dataRetrievalTime);
-				weatherResults.add(weatherForecast);
+				Weather forecast = convertToWeather(forecastEntry, location, retrievalTime);
+				results.add(forecast);
 			}
 		}
 
-		private Weather convertJsonObjectToWeather(JsonObject forecastJson, Location location, Instant retrievalTime) {
+		private Weather convertToWeather(JsonObject forecastJson, Location location, Instant retrievalTime) {
 			return new Weather(
 					retrievalTime,
 					location,
-					extractForecastTimestamp(forecastJson),
-					extractTemperatureCelsius(forecastJson),
-					extractHumidityPercentage(forecastJson),
-					extractWeatherConditionCode(forecastJson),
-					extractWeatherConditionMain(forecastJson),
-					extractWeatherConditionDescription(forecastJson),
-					extractCloudCoverPercentage(forecastJson),
-					extractWindSpeedMetersPerSecond(forecastJson),
-					extractRainVolumeMillimeters(forecastJson),
-					extractSnowVolumeMillimeters(forecastJson),
-					extractDayPeriodIndicator(forecastJson),
+					extractTimestamp(forecastJson),
+					extractTemperature(forecastJson),
+					extractHumidity(forecastJson),
+					extractWeatherId(forecastJson),
+					extractWeatherMain(forecastJson),
+					extractWeatherDescription(forecastJson),
+					extractCloudiness(forecastJson),
+					extractWindSpeed(forecastJson),
+					extractRainVolume(forecastJson),
+					extractSnowVolume(forecastJson),
+					extractDayPeriod(forecastJson),
 					"OpenWeatherApi"
 			);
 		}
 
-		private Instant extractForecastTimestamp(JsonObject forecastJson) {
+		private Instant extractTimestamp(JsonObject forecastJson) {
 			long timestampSeconds = forecastJson.get("dt").getAsLong();
 			return Instant.ofEpochSecond(timestampSeconds);
 		}
 
-		private double extractTemperatureCelsius(JsonObject forecastJson) {
-			JsonObject mainDataSection = forecastJson.getAsJsonObject("main");
-			return mainDataSection.get("temp").getAsDouble();
+		private double extractTemperature(JsonObject forecastJson) {
+			JsonObject mainData = forecastJson.getAsJsonObject("main");
+			return mainData.get("temp").getAsDouble();
 		}
 
-		private int extractHumidityPercentage(JsonObject forecastJson) {
-			JsonObject mainDataSection = forecastJson.getAsJsonObject("main");
-			return mainDataSection.get("humidity").getAsInt();
+		private int extractHumidity(JsonObject forecastJson) {
+			JsonObject mainData = forecastJson.getAsJsonObject("main");
+			return mainData.get("humidity").getAsInt();
 		}
 
-		private JsonObject extractPrimaryWeatherCondition(JsonObject forecastJson) {
+		private JsonObject extractPrimaryWeather(JsonObject forecastJson) {
 			JsonArray weatherConditions = forecastJson.getAsJsonArray("weather");
 			return weatherConditions.get(0).getAsJsonObject();
 		}
 
-		private int extractWeatherConditionCode(JsonObject forecastJson) {
-			JsonObject weatherCondition = extractPrimaryWeatherCondition(forecastJson);
-			return weatherCondition.get("id").getAsInt();
+		private int extractWeatherId(JsonObject forecastJson) {
+			JsonObject weather = extractPrimaryWeather(forecastJson);
+			return weather.get("id").getAsInt();
 		}
 
-		private String extractWeatherConditionMain(JsonObject forecastJson) {
-			JsonObject weatherCondition = extractPrimaryWeatherCondition(forecastJson);
-			return weatherCondition.get("main").getAsString();
+		private String extractWeatherMain(JsonObject forecastJson) {
+			JsonObject weather = extractPrimaryWeather(forecastJson);
+			return weather.get("main").getAsString();
 		}
 
-		private String extractWeatherConditionDescription(JsonObject forecastJson) {
-			JsonObject weatherCondition = extractPrimaryWeatherCondition(forecastJson);
-			return weatherCondition.get("description").getAsString();
+		private String extractWeatherDescription(JsonObject forecastJson) {
+			JsonObject weather = extractPrimaryWeather(forecastJson);
+			return weather.get("description").getAsString();
 		}
 
-		private int extractCloudCoverPercentage(JsonObject forecastJson) {
-			return extractNestedJsonValue(forecastJson, "clouds", "all", JsonElement::getAsInt, 0);
+		private int extractCloudiness(JsonObject forecastJson) {
+			return extractNestedValue(forecastJson, "clouds", "all", JsonElement::getAsInt, 0);
 		}
 
-		private double extractWindSpeedMetersPerSecond(JsonObject forecastJson) {
-			return extractNestedJsonValue(forecastJson, "wind", "speed", JsonElement::getAsDouble, 0.0);
+		private double extractWindSpeed(JsonObject forecastJson) {
+			return extractNestedValue(forecastJson, "wind", "speed", JsonElement::getAsDouble, 0.0);
 		}
 
-		private double extractRainVolumeMillimeters(JsonObject forecastJson) {
-			return extractPrecipitationVolume(forecastJson, "rain");
+		private double extractRainVolume(JsonObject forecastJson) {
+			return extractPrecipitation(forecastJson, "rain");
 		}
 
-		private double extractSnowVolumeMillimeters(JsonObject forecastJson) {
-			return extractPrecipitationVolume(forecastJson, "snow");
+		private double extractSnowVolume(JsonObject forecastJson) {
+			return extractPrecipitation(forecastJson, "snow");
 		}
 
-		private String extractDayPeriodIndicator(JsonObject forecastJson) {
-			return extractNestedJsonValue(forecastJson, "sys", "pod", JsonElement::getAsString, "d");
+		private String extractDayPeriod(JsonObject forecastJson) {
+			return extractNestedValue(forecastJson, "sys", "pod", JsonElement::getAsString, "d");
 		}
 
-		private double extractPrecipitationVolume(JsonObject forecastJson, String precipitationType) {
-			if (!forecastJson.has(precipitationType)) {
+		private double extractPrecipitation(JsonObject forecastJson, String type) {
+			if (!forecastJson.has(type)) {
 				return 0.0;
 			}
 
-			JsonObject precipitationData = forecastJson.getAsJsonObject(precipitationType);
-			return extractHourlyPrecipitationAmount(precipitationData);
+			JsonObject precipData = forecastJson.getAsJsonObject(type);
+			return getPrecipitationAmount(precipData);
 		}
 
-		private double extractHourlyPrecipitationAmount(JsonObject precipitationData) {
-			if (precipitationData.has("1h")) {
-				return precipitationData.get("1h").getAsDouble();
+		private double getPrecipitationAmount(JsonObject precipData) {
+			if (precipData.has("1h")) {
+				return precipData.get("1h").getAsDouble();
 			}
 
-			if (precipitationData.has("3h")) {
-				return precipitationData.get("3h").getAsDouble();
+			if (precipData.has("3h")) {
+				return precipData.get("3h").getAsDouble();
 			}
 
 			return 0.0;
 		}
 
-		private <T> T extractNestedJsonValue(JsonObject parentJson, String objectName, String fieldName,
-											 Function<JsonElement, T> valueConverter, T defaultValue) {
-			if (!parentJson.has(objectName)) {
+		private <T> T extractNestedValue(JsonObject parent, String objectName, String fieldName,
+										 Function<JsonElement, T> converter, T defaultValue) {
+			if (!parent.has(objectName)) {
 				return defaultValue;
 			}
 
-			JsonObject nestedObject = parentJson.getAsJsonObject(objectName);
-			return extractJsonFieldValue(nestedObject, fieldName, valueConverter, defaultValue);
+			JsonObject nestedObject = parent.getAsJsonObject(objectName);
+			return extractFieldValue(nestedObject, fieldName, converter, defaultValue);
 		}
 
-		private <T> T extractJsonFieldValue(JsonObject jsonObject, String fieldName,
-											Function<JsonElement, T> valueConverter, T defaultValue) {
+		private <T> T extractFieldValue(JsonObject jsonObject, String fieldName,
+										Function<JsonElement, T> converter, T defaultValue) {
 			if (!jsonObject.has(fieldName)) {
 				return defaultValue;
 			}
 
-			return valueConverter.apply(jsonObject.get(fieldName));
+			return converter.apply(jsonObject.get(fieldName));
 		}
 	}
 }

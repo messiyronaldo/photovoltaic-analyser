@@ -11,28 +11,29 @@ import java.util.logging.Logger;
 
 public class SQLiteWeatherStore implements WeatherStore {
 	private final String databaseFilePath;
+	private static final Logger logger = Logger.getLogger(SQLiteWeatherStore.class.getName());
 
 	public SQLiteWeatherStore(String databaseFilePath) {
 		this.databaseFilePath = databaseFilePath;
-		createDatabaseTablesIfNotExist();
+		initializeDatabase();
 	}
 
-	private void createDatabaseTablesIfNotExist() {
-		try (Connection connection = openDatabaseConnection()) {
-			createWeatherForecastTable(connection);
-		} catch (SQLException exception) {
-			logDatabaseError("Inicialización de la base de datos fallida", exception);
-			throw new RuntimeException("Fallo al inicializar la base de datos", exception);
+	private void initializeDatabase() {
+		try (Connection connection = openConnection()) {
+			createTables(connection);
+		} catch (SQLException e) {
+			logError("Database initialization failed", e);
+			throw new RuntimeException("Failed to initialize database", e);
 		}
 	}
 
-	private void createWeatherForecastTable(Connection connection) throws SQLException {
+	private void createTables(Connection connection) throws SQLException {
 		try (Statement statement = connection.createStatement()) {
-			statement.execute(buildCreateWeatherTableSql());
+			statement.execute(createWeatherTableSql());
 		}
 	}
 
-	private String buildCreateWeatherTableSql() {
+	private String createWeatherTableSql() {
 		return "CREATE TABLE IF NOT EXISTS weather_forecasts (" +
 				"id INTEGER PRIMARY KEY AUTOINCREMENT, " +
 				"timestamp TEXT NOT NULL, " +
@@ -55,79 +56,68 @@ public class SQLiteWeatherStore implements WeatherStore {
 				")";
 	}
 
-	private Connection openDatabaseConnection() throws SQLException {
+	private Connection openConnection() throws SQLException {
 		try {
 			Class.forName("org.sqlite.JDBC");
 			return DriverManager.getConnection("jdbc:sqlite:" + databaseFilePath);
-		} catch (ClassNotFoundException exception) {
-			throw new SQLException("Driver de SQLite no encontrado", exception);
+		} catch (ClassNotFoundException e) {
+			throw new SQLException("SQLite driver not found", e);
 		}
 	}
 
 	@Override
 	public void saveWeatherForecasts(List<Weather> forecasts) {
-		if (isEmptyForecastList(forecasts)) {
-			return;
-		}
+		if (isEmpty(forecasts)) return;
 
-		try (Connection connection = openDatabaseConnection()) {
-			executeDatabaseTransaction(connection, forecasts);
-		} catch (SQLException exception) {
-			logDatabaseError("Error al guardar pronósticos del clima", exception);
+		try (Connection connection = openConnection()) {
+			executeTransaction(connection, forecasts);
+		} catch (SQLException e) {
+			logError("Error saving weather forecasts", e);
 		}
 	}
 
-	private boolean isEmptyForecastList(List<Weather> forecasts) {
+	private boolean isEmpty(List<Weather> forecasts) {
 		return forecasts == null || forecasts.isEmpty();
 	}
 
-	private void executeDatabaseTransaction(Connection connection, List<Weather> forecasts)
-			throws SQLException {
-		disableAutoCommit(connection);
+	private void executeTransaction(Connection connection, List<Weather> forecasts) throws SQLException {
+		connection.setAutoCommit(false);
 
 		try {
 			Map<String, Weather> existingForecasts = findExistingForecasts(connection, forecasts);
-			int[] operationCounts = processForecastBatch(connection, forecasts, existingForecasts);
+			int[] counts = processForecasts(connection, forecasts, existingForecasts);
 
 			connection.commit();
-			logOperationSummary(operationCounts[0], operationCounts[1], operationCounts[2]);
-		} catch (SQLException exception) {
+			logOperationSummary(counts[0], counts[1], counts[2]);
+		} catch (SQLException e) {
 			rollbackTransaction(connection);
-			throw exception;
+			throw e;
 		} finally {
-			enableAutoCommit(connection);
+			connection.setAutoCommit(true);
 		}
-	}
-
-	private void disableAutoCommit(Connection connection) throws SQLException {
-		connection.setAutoCommit(false);
-	}
-
-	private void enableAutoCommit(Connection connection) throws SQLException {
-		connection.setAutoCommit(true);
 	}
 
 	private void rollbackTransaction(Connection connection) {
 		try {
 			connection.rollback();
-		} catch (SQLException exception) {
-			logDatabaseError("Error al hacer rollback de la transacción", exception);
+		} catch (SQLException e) {
+			logError("Error rolling back transaction", e);
 		}
 	}
 
-	private int[] processForecastBatch(Connection connection, List<Weather> forecasts,
-									   Map<String, Weather> existingForecasts) throws SQLException {
-		String insertSql = buildInsertForecastSql();
-		String updateSql = buildUpdateForecastSql();
+	private int[] processForecasts(Connection connection, List<Weather> forecasts,
+								   Map<String, Weather> existingForecasts) throws SQLException {
+		String insertSql = createInsertSql();
+		String updateSql = createUpdateSql();
 
 		try (PreparedStatement insertStatement = connection.prepareStatement(insertSql);
 			 PreparedStatement updateStatement = connection.prepareStatement(updateSql)) {
 
-			return addForecastsToBatch(insertStatement, updateStatement, forecasts, existingForecasts);
+			return processForecastBatch(insertStatement, updateStatement, forecasts, existingForecasts);
 		}
 	}
 
-	private String buildInsertForecastSql() {
+	private String createInsertSql() {
 		return "INSERT INTO weather_forecasts " +
 				"(timestamp, prediction_timestamp, location_name, latitude, longitude, " +
 				"temperature, humidity, weather_id, weather_main, weather_description, " +
@@ -135,7 +125,7 @@ public class SQLiteWeatherStore implements WeatherStore {
 				"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 	}
 
-	private String buildUpdateForecastSql() {
+	private String createUpdateSql() {
 		return "UPDATE weather_forecasts SET " +
 				"timestamp = ?, temperature = ?, humidity = ?, " +
 				"weather_id = ?, weather_main = ?, weather_description = ?, " +
@@ -144,40 +134,41 @@ public class SQLiteWeatherStore implements WeatherStore {
 				"WHERE latitude = ? AND longitude = ? AND prediction_timestamp = ?";
 	}
 
-	private int[] addForecastsToBatch(PreparedStatement insertStatement, PreparedStatement updateStatement,
-									  List<Weather> forecasts, Map<String, Weather> existingForecasts)
+	private int[] processForecastBatch(PreparedStatement insertStatement, PreparedStatement updateStatement,
+									   List<Weather> forecasts, Map<String, Weather> existingForecasts)
 			throws SQLException {
 		int insertCount = 0;
 		int updateCount = 0;
 		int unchangedCount = 0;
 
 		for (Weather forecast : forecasts) {
-			String forecastKey = createForecastKey(forecast);
+			String key = createForecastKey(forecast);
 
-			if (existingForecasts.containsKey(forecastKey)) {
-				Weather existingForecast = existingForecasts.get(forecastKey);
+			if (existingForecasts.containsKey(key)) {
+				Weather existingForecast = existingForecasts.get(key);
 
 				if (hasForecastChanged(existingForecast, forecast)) {
-					addForecastToUpdateBatch(updateStatement, forecast);
+					addToUpdateBatch(updateStatement, forecast);
 					updateCount++;
 				} else {
 					unchangedCount++;
 				}
 			} else {
-				addForecastToInsertBatch(insertStatement, forecast);
+				addToInsertBatch(insertStatement, forecast);
 				insertCount++;
 			}
 		}
 
-		if (insertCount > 0) {
-			insertStatement.executeBatch();
-		}
-
-		if (updateCount > 0) {
-			updateStatement.executeBatch();
-		}
+		executeNonEmptyBatch(insertStatement, insertCount);
+		executeNonEmptyBatch(updateStatement, updateCount);
 
 		return new int[]{insertCount, updateCount, unchangedCount};
+	}
+
+	private void executeNonEmptyBatch(PreparedStatement statement, int count) throws SQLException {
+		if (count > 0) {
+			statement.executeBatch();
+		}
 	}
 
 	private String createForecastKey(Weather forecast) {
@@ -187,8 +178,7 @@ public class SQLiteWeatherStore implements WeatherStore {
 				forecast.getPredictionTimestamp().toString();
 	}
 
-	private void addForecastToInsertBatch(PreparedStatement statement, Weather forecast)
-			throws SQLException {
+	private void addToInsertBatch(PreparedStatement statement, Weather forecast) throws SQLException {
 		Location location = forecast.getLocation();
 
 		statement.setString(1, forecast.getTimestamp().toString());
@@ -211,8 +201,7 @@ public class SQLiteWeatherStore implements WeatherStore {
 		statement.addBatch();
 	}
 
-	private void addForecastToUpdateBatch(PreparedStatement statement, Weather forecast)
-			throws SQLException {
+	private void addToUpdateBatch(PreparedStatement statement, Weather forecast) throws SQLException {
 		Location location = forecast.getLocation();
 
 		statement.setString(1, forecast.getTimestamp().toString());
@@ -226,7 +215,7 @@ public class SQLiteWeatherStore implements WeatherStore {
 		statement.setDouble(9, forecast.getRainVolume());
 		statement.setDouble(10, forecast.getSnowVolume());
 		statement.setString(11, forecast.getPartOfDay());
-		statement.setString(12, forecast.getSourceSystem()); // Add this line
+		statement.setString(12, forecast.getSourceSystem());
 		statement.setDouble(13, location.getLatitude());
 		statement.setDouble(14, location.getLongitude());
 		statement.setString(15, forecast.getPredictionTimestamp().toString());
@@ -234,24 +223,24 @@ public class SQLiteWeatherStore implements WeatherStore {
 		statement.addBatch();
 	}
 
-	private boolean hasForecastChanged(Weather existingForecast, Weather newForecast) {
-		if (existingForecast.getTemperature() != newForecast.getTemperature()) return true;
-		if (existingForecast.getHumidity() != newForecast.getHumidity()) return true;
-		if (existingForecast.getWeatherID() != newForecast.getWeatherID()) return true;
-		if (existingForecast.getWindSpeed() != newForecast.getWindSpeed()) return true;
-		if (existingForecast.getRainVolume() != newForecast.getRainVolume()) return true;
-		if (existingForecast.getSnowVolume() != newForecast.getSnowVolume()) return true;
-		if (existingForecast.getCloudiness() != newForecast.getCloudiness()) return true;
+	private boolean hasForecastChanged(Weather existing, Weather newForecast) {
+		if (existing.getTemperature() != newForecast.getTemperature()) return true;
+		if (existing.getHumidity() != newForecast.getHumidity()) return true;
+		if (existing.getWeatherID() != newForecast.getWeatherID()) return true;
+		if (existing.getWindSpeed() != newForecast.getWindSpeed()) return true;
+		if (existing.getRainVolume() != newForecast.getRainVolume()) return true;
+		if (existing.getSnowVolume() != newForecast.getSnowVolume()) return true;
+		if (existing.getCloudiness() != newForecast.getCloudiness()) return true;
 
-		return !existingForecast.getWeatherMain().equals(newForecast.getWeatherMain())
-				|| !existingForecast.getWeatherDescription().equals(newForecast.getWeatherDescription())
-				|| !existingForecast.getPartOfDay().equals(newForecast.getPartOfDay());
+		return !existing.getWeatherMain().equals(newForecast.getWeatherMain())
+				|| !existing.getWeatherDescription().equals(newForecast.getWeatherDescription())
+				|| !existing.getPartOfDay().equals(newForecast.getPartOfDay());
 	}
 
 	private Map<String, Weather> findExistingForecasts(Connection connection, List<Weather> forecasts)
 			throws SQLException {
 		Set<LocationCoordinates> uniqueLocations = extractUniqueLocations(forecasts);
-		String sql = buildExistingForecastsQuery(uniqueLocations);
+		String sql = buildExistingForecastQuery(uniqueLocations);
 		List<Object> parameters = createLocationParameters(uniqueLocations);
 
 		return queryExistingForecasts(connection, sql, parameters);
@@ -268,7 +257,7 @@ public class SQLiteWeatherStore implements WeatherStore {
 		return uniqueLocations;
 	}
 
-	private String buildExistingForecastsQuery(Set<LocationCoordinates> uniqueLocations) {
+	private String buildExistingForecastQuery(Set<LocationCoordinates> uniqueLocations) {
 		StringBuilder conditions = new StringBuilder();
 
 		for (int i = 0; i < uniqueLocations.size(); i++) {
@@ -320,31 +309,32 @@ public class SQLiteWeatherStore implements WeatherStore {
 	public List<Weather> getWeatherForecasts(double latitude, double longitude) {
 		List<Weather> forecasts = new ArrayList<>();
 
-		try (Connection connection = openDatabaseConnection()) {
-			String sql = buildForecastsQueryByLocation();
-
-			try (PreparedStatement statement = connection.prepareStatement(sql)) {
-				statement.setDouble(1, latitude);
-				statement.setDouble(2, longitude);
-
-				try (ResultSet results = statement.executeQuery()) {
-					while (results.next()) {
-						Weather forecast = createWeatherFromResultSet(results);
-						forecasts.add(forecast);
-					}
-				}
-			}
-		} catch (SQLException exception) {
-			logDatabaseError("Error al obtener los pronósticos del clima", exception);
+		try (Connection connection = openConnection()) {
+			forecasts = queryForecastsByLocation(connection, latitude, longitude);
+		} catch (SQLException e) {
+			logError("Error retrieving weather forecasts", e);
 		}
 
 		return forecasts;
 	}
 
-	private String buildForecastsQueryByLocation() {
-		return "SELECT * FROM weather_forecasts " +
-				"WHERE latitude = ? AND longitude = ? " +
-				"ORDER BY prediction_timestamp";
+	private List<Weather> queryForecastsByLocation(Connection connection, double latitude, double longitude)
+			throws SQLException {
+		List<Weather> forecasts = new ArrayList<>();
+		String sql = "SELECT * FROM weather_forecasts WHERE latitude = ? AND longitude = ? ORDER BY prediction_timestamp";
+
+		try (PreparedStatement statement = connection.prepareStatement(sql)) {
+			statement.setDouble(1, latitude);
+			statement.setDouble(2, longitude);
+
+			try (ResultSet results = statement.executeQuery()) {
+				while (results.next()) {
+					forecasts.add(createWeatherFromResultSet(results));
+				}
+			}
+		}
+
+		return forecasts;
 	}
 
 	private Weather createWeatherFromResultSet(ResultSet results) throws SQLException {
@@ -376,28 +366,25 @@ public class SQLiteWeatherStore implements WeatherStore {
 		);
 	}
 
-	private void logOperationSummary(int insertCount, int updateCount, int unchangedCount) {
-		System.out.println("Resumen de operaciones en pronósticos: " +
-				insertCount + " nuevos, " +
-				updateCount + " actualizados, " +
-				unchangedCount + " sin cambios.");
+	private void logOperationSummary(int inserted, int updated, int unchanged) {
+		System.out.println("Forecast operations summary: " +
+				inserted + " new, " +
+				updated + " updated, " +
+				unchanged + " unchanged.");
 	}
 
-	private void logDatabaseError(String message, Exception exception) {
-		Logger logger = Logger.getLogger(SQLiteWeatherStore.class.getName());
-		logger.log(Level.SEVERE, message, exception);
+	private void logError(String message, Exception e) {
+		logger.log(Level.SEVERE, message, e);
 	}
 
 	private record LocationCoordinates(double latitude, double longitude) {
-
 		@Override
-			public boolean equals(Object o) {
-				if (this == o) return true;
-				if (o == null || getClass() != o.getClass()) return false;
-				LocationCoordinates that = (LocationCoordinates) o;
-				return Double.compare(that.latitude, latitude) == 0 &&
-						Double.compare(that.longitude, longitude) == 0;
-			}
-
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (o == null || getClass() != o.getClass()) return false;
+			LocationCoordinates that = (LocationCoordinates) o;
+			return Double.compare(that.latitude, latitude) == 0 &&
+					Double.compare(that.longitude, longitude) == 0;
+		}
 	}
 }

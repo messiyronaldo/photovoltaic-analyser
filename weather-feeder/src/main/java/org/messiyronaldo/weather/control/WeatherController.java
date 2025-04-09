@@ -4,6 +4,7 @@ import org.messiyronaldo.weather.model.Location;
 import org.messiyronaldo.weather.model.Weather;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -18,24 +19,38 @@ public class WeatherController {
 		this.location = location;
 		this.weatherProvider = weatherProvider;
 		this.weatherStore = weatherStore;
+		this.timer = createAndScheduleTimer(updateIntervalMinutes);
+	}
 
-		this.timer = new Timer("WeatherUpdate-" + location.getName(), false);
+	private Timer createAndScheduleTimer(long updateIntervalMinutes) {
+		Timer timer = new Timer("WeatherUpdate-" + location.getName(), false);
+		long updateIntervalMillis = updateIntervalMinutes * 60 * 1000;
+
 		timer.scheduleAtFixedRate(new TimerTask() {
 			@Override
 			public void run() {
-				WeatherController.this.run();
+				updateWeatherData();
 			}
-		}, 0, updateIntervalMinutes * 60 * 1000); // Convertir minutos a milisegundos
+		}, 0, updateIntervalMillis);
+		return timer;
 	}
 
-	public void run() {
+	private void updateWeatherData() {
 		try {
 			List<Weather> weatherData = weatherProvider.getHourlyForecast(location);
 			weatherStore.saveWeatherForecasts(weatherData);
-			System.out.println("Datos meteorológicos actualizados para: " + location.getName() +
-					" a las " + java.time.LocalDateTime.now());
+			logSuccessfulUpdate();
 		} catch (IOException e) {
-			System.err.println("Error al obtener datos meteorológicos: " + e.getMessage());
+			logUpdateError(e);
 		}
+	}
+
+	private void logSuccessfulUpdate() {
+		System.out.println("Weather data updated for: " + location.getName() +
+				" at " + LocalDateTime.now());
+	}
+
+	private void logUpdateError(Exception e) {
+		System.err.println("Error retrieving weather data: " + e.getMessage());
 	}
 }
