@@ -16,11 +16,12 @@ public class Weather {
 	private final double rainVolume;
 	private final double snowVolume;
 	private final String partOfDay;
+	private final String sourceSystem;
 
 	public Weather(Instant timestamp, Location location, Instant predictionTimestamp,
 				   double temperature, int humidity, int weatherID, String weatherMain,
 				   String weatherDescription, int cloudiness, double windSpeed,
-				   double rainVolume,double snowVolume, String partOfDay) {
+				   double rainVolume, double snowVolume, String partOfDay, String sourceSystem) {
 		this.timestamp = timestamp;
 		this.location = location;
 		this.predictionTimestamp = predictionTimestamp;
@@ -34,6 +35,7 @@ public class Weather {
 		this.rainVolume = rainVolume;
 		this.snowVolume = snowVolume;
 		this.partOfDay = partOfDay;
+		this.sourceSystem = sourceSystem;
 	}
 
 	public Instant getTimestamp() {
@@ -88,6 +90,10 @@ public class Weather {
 		return partOfDay;
 	}
 
+	public String getSourceSystem() {
+		return sourceSystem;
+	}
+
 	@Override
 	public String toString() {
 		return "Weather{" +
@@ -104,6 +110,7 @@ public class Weather {
 				", rainVolume=" + rainVolume +
 				", snowVolume=" + snowVolume +
 				", partOfDay='" + partOfDay + '\'' +
+				", sourceSystem='" + sourceSystem + '\'' +
 				'}';
 	}
 }
