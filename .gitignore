@@ -1,18 +1,24 @@
+# === BUILD DIRECTORIES ===
 target/
-!.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
 
-### IntelliJ IDEA ###
-.idea/modules.xml
-.idea/jarRepositories.xml
-.idea/compiler.xml
-.idea/libraries/
+# === MAVEN ===
+!.mvn/wrapper/maven-wrapper.jar
+
+# === DATABASE ===
+photovoltaic-data.db
+
+# === INTELLIJ IDEA ===
+.idea/
 *.iws
 *.iml
 *.ipr
 
-### Eclipse ###
+# === ECLIPSE ===
 .apt_generated
 .classpath
 .factorypath
@@ -21,20 +27,15 @@ target/
 .springBeans
 .sts4-cache
 
-### NetBeans ###
+# === NETBEANS ===
 /nbproject/private/
 /nbbuild/
 /dist/
 /nbdist/
 /.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
 
-### VS Code ###
+# === VS CODE ===
 .vscode/
 
-### Mac OS ###
+# === MAC OS ===
 .DS_Store
-
-photovoltaic-data.db
