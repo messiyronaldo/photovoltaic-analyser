@@ -14,8 +14,10 @@ photovoltaic-data.db
 
 # === INTELLIJ IDEA ===
 .idea/
-*.iws
+!.idea/modules.xml
+!.idea/misc.xml
 *.iml
+*.iws
 *.ipr
 
 # === ECLIPSE ===
