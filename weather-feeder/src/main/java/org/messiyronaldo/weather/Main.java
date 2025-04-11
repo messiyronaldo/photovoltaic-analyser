@@ -3,34 +3,45 @@ package org.messiyronaldo.weather;
 import org.messiyronaldo.weather.control.*;
 import org.messiyronaldo.weather.model.Location;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 public class Main {
 	private static final long UPDATE_INTERVAL_MINUTES = 60 * 6;
-	private static final String DATABASE_FILENAME = "photovoltaic-data.db";
 	private static final int CONTROLLER_START_DELAY_SECONDS = 3;
-	private static final List<WeatherController> controllers = new ArrayList<>();
+	private static final List<WeatherController> controllers = new java.util.ArrayList<>();
 
 	public static void main(String[] args) {
 		validateArguments(args);
 
 		String apiKey = args[0];
+		String databaseFileName = args[1];
+		String storeType = args[2].toLowerCase();
+
 		List<Location> monitoredLocations = createLocationsList();
 
 		WeatherProvider weatherProvider = new OpenWeatherProvider(apiKey);
-		WeatherStore weatherStore = new SQLiteWeatherStore(DATABASE_FILENAME);
+		WeatherStore weatherStore = null;
+		WeatherPublisher weatherPublisher = null;
 
-		startWeatherControllers(monitoredLocations, weatherProvider, weatherStore);
+		if (storeType.equals("sql")) {
+			weatherStore = new SQLiteWeatherStore(databaseFileName);
+		} else if (storeType.equals("activemq")) {
+			weatherPublisher = new ActiveMQWeatherPublisher();
+		} else {
+			System.err.println("Invalid store type. Use 'sql' or 'activemq'.");
+			System.exit(1);
+		}
+
+		startWeatherControllers(monitoredLocations, weatherProvider, weatherStore, weatherPublisher);
 		registerShutdownHook();
 		keepApplicationRunning();
 	}
 
 	private static void validateArguments(String[] args) {
-		if (args.length < 1) {
-			System.err.println("Usage: java -jar weather-feeder.jar <api-key>");
+		if (args.length != 3) {
+			System.err.println("Usage: java -jar weather-feeder.jar <api-key> <database-file> <store-type>");
 			System.exit(1);
 		}
 	}
@@ -44,11 +55,17 @@ public class Main {
 
 	private static void startWeatherControllers(List<Location> locations,
 												WeatherProvider provider,
-												WeatherStore store) {
+												WeatherStore store,
+												WeatherPublisher publisher) {
 		System.out.println("Starting weather monitoring for " + locations.size() + " locations");
 
 		for (Location location : locations) {
-			WeatherController controller = new WeatherController(location, provider, store, UPDATE_INTERVAL_MINUTES);
+			WeatherController controller;
+			if (store != null) {
+				controller = new WeatherController(location, provider, store, null, UPDATE_INTERVAL_MINUTES);
+			} else {
+				controller = new WeatherController(location, provider, null, publisher, UPDATE_INTERVAL_MINUTES);
+			}
 			controllers.add(controller);
 			System.out.println("Controller started for: " + location.getName());
 			delayBetweenControllers();

@@ -13,12 +13,20 @@ public class WeatherController {
 	private final Location location;
 	private final WeatherProvider weatherProvider;
 	private final WeatherStore weatherStore;
+	private final WeatherPublisher weatherPublisher;
 	private final Timer timer;
 
-	public WeatherController(Location location, WeatherProvider weatherProvider, WeatherStore weatherStore, long updateIntervalMinutes) {
+	public WeatherController(Location location, WeatherProvider weatherProvider, WeatherStore weatherStore, WeatherPublisher weatherPublisher, long updateIntervalMinutes) {
 		this.location = location;
 		this.weatherProvider = weatherProvider;
 		this.weatherStore = weatherStore;
+
+		this.weatherPublisher = weatherPublisher;
+
+		if (this.weatherPublisher != null) {
+			this.weatherPublisher.start();
+		}
+
 		this.timer = createAndScheduleTimer(updateIntervalMinutes);
 	}
 
