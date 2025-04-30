@@ -1,9 +1,6 @@
 package org.messiyronaldo;
 
-import org.messiyronaldo.eventstore.control.EventStore;
-import org.messiyronaldo.eventstore.control.EventStoreManager;
-import org.messiyronaldo.eventstore.control.Subscriber;
-import org.messiyronaldo.eventstore.control.SubscriberActiveMQ;
+import org.messiyronaldo.eventstore.control.*;
 
 public class Main {
 	private static final String BROKER_URL = "tcp://localhost:61616";
@@ -11,44 +8,47 @@ public class Main {
 	private static final String WEATHER_TOPIC = "prediction.Weather";
 	private static final String ENERGY_TOPIC = "prediction.Energy";
 
-	private static Subscriber weatherSubscriber;
-	private static Subscriber energySubscriber;
-
 	public static void main(String[] args) {
 		System.out.println("Starting Event Store Builder...");
 
-		EventStore eventStoreManager = new EventStoreManager();
+		EventStore eventStore = new EventStoreManager();
 
-		weatherSubscriber = new SubscriberActiveMQ(
-				BROKER_URL,
-				CLIENT_BASE_ID + "_Weather",
-				CLIENT_BASE_ID + "_WeatherSub",
-				eventStoreManager);
+		Subscriber weatherSubscriber = createSubscriber(eventStore, "Weather");
+		Subscriber energySubscriber = createSubscriber(eventStore, "Energy");
 
-		energySubscriber = new SubscriberActiveMQ(
-				BROKER_URL,
-				CLIENT_BASE_ID + "_Energy",
-				CLIENT_BASE_ID + "_EnergySub",
-				eventStoreManager);
-
-		weatherSubscriber.start();
-		weatherSubscriber.subscribe(WEATHER_TOPIC);
-
-		energySubscriber.start();
-		energySubscriber.subscribe(ENERGY_TOPIC);
-
-		registerShutdownHook();
+		registerShutdownHook(weatherSubscriber, energySubscriber);
 
 		System.out.println("Event Store Builder running and subscribed to topics");
-
 		waitForever();
 	}
 
-	private static void registerShutdownHook() {
+	private static Subscriber createSubscriber(EventStore eventStore, String type) {
+		String topic = type.equals("Weather") ? WEATHER_TOPIC : ENERGY_TOPIC;
+		Subscriber subscriber = new SubscriberActiveMQ(
+				BROKER_URL,
+				CLIENT_BASE_ID + "_" + type,
+				CLIENT_BASE_ID + "_" + type + "Sub",
+				eventStore);
+
+		subscriber.start();
+		subscriber.subscribe(topic);
+		System.out.println("Successfully subscribed to: " + topic);
+		return subscriber;
+	}
+
+	private static void registerShutdownHook(Subscriber... subscribers) {
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
 			System.out.println("Shutting down Event Store Builder...");
-			if (weatherSubscriber != null) weatherSubscriber.close();
-			if (energySubscriber != null) energySubscriber.close();
+			for (Subscriber sub : subscribers) {
+				if (sub != null) {
+					try {
+						sub.close();
+						System.out.println("Subscriber closed successfully");
+					} catch (Exception e) {
+						System.err.println("Error closing subscriber: " + e.getMessage());
+					}
+				}
+			}
 		}));
 	}
 

@@ -4,17 +4,21 @@ import org.messiyronaldo.energy.control.*;
 
 public class Main {
     private static final long UPDATE_INTERVAL_MINUTES = 60 * 12; // 12 hours
-    private static final String DATABASE_FILENAME = "photovoltaic-data.db";
+    private static final String DATABASE_FILENAME = "energy-data.db";
     private static EnergyController energyController;
 
     public static void main(String[] args) {
         EnergyPricesProvider energyProvider = new REEEnergyProvider();
         EnergyPricesStore energyStore = new SQLiteEnergyPriceStore(DATABASE_FILENAME);
+        EnergyPublisher energyPublisher = new EnergyPublisher();
 
         System.out.println("Starting energy price monitoring");
 
         energyController = new EnergyController(
-                energyProvider, energyStore, UPDATE_INTERVAL_MINUTES);
+                energyProvider,
+                energyStore,
+                energyPublisher,
+                UPDATE_INTERVAL_MINUTES);
 
         System.out.println("Energy price controller started");
         System.out.println("Application running. Data will update every " +

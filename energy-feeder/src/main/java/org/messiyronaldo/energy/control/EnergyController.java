@@ -12,12 +12,21 @@ import java.util.TimerTask;
 public class EnergyController {
 	private final EnergyPricesProvider energyProvider;
 	private final EnergyPricesStore energyStore;
+	private final EnergyPublisher publisher;
 	private final Timer timer;
 
-	public EnergyController(EnergyPricesProvider energyProvider, EnergyPricesStore energyStore, long updateIntervalMinutes) {
+	public EnergyController(EnergyPricesProvider energyProvider,
+							EnergyPricesStore energyStore,
+							EnergyPublisher publisher,
+							long updateIntervalMinutes) {
 		this.energyProvider = energyProvider;
 		this.energyStore = energyStore;
+		this.publisher = publisher;
 		this.timer = createAndScheduleTimer(updateIntervalMinutes);
+
+		if (this.publisher != null) {
+			this.publisher.start();
+		}
 	}
 
 	private Timer createAndScheduleTimer(long updateIntervalMinutes) {
@@ -39,18 +48,24 @@ public class EnergyController {
 			LocalDate today = LocalDate.now();
 			List<EnergyPrice> prices = energyProvider.getEnergyPrices(today);
 
-			processRetrievedPrices(today, prices);
+			if (publisher != null) {
+				prices.forEach(price -> {
+					try {
+						publisher.publish(price);
+						System.out.println("Published energy price for: " + price.getPriceTimestamp());
+					} catch (Exception e) {
+						System.err.println("Failed to publish energy price: " + e.getMessage());
+					}
+				});
+			}
+
+			if (energyStore != null) {
+				energyStore.saveEnergyPrices(prices);
+			}
+
+			logSuccessfulUpdate(today, prices.size());
 		} catch (IOException e) {
 			logError(e);
-		}
-	}
-
-	private void processRetrievedPrices(LocalDate date, List<EnergyPrice> prices) {
-		if (prices != null && !prices.isEmpty()) {
-			energyStore.saveEnergyPrices(prices);
-			logSuccessfulUpdate(date, prices.size());
-		} else {
-			logEmptyUpdate(date);
 		}
 	}
 
@@ -58,10 +73,6 @@ public class EnergyController {
 		System.out.println("Energy price data updated for: " + date +
 				" at " + LocalDateTime.now() +
 				" - " + count + " records");
-	}
-
-	private void logEmptyUpdate(LocalDate date) {
-		System.out.println("No energy price data retrieved for: " + date);
 	}
 
 	private void logError(Exception e) {
@@ -72,6 +83,9 @@ public class EnergyController {
 		if (timer != null) {
 			timer.cancel();
 			System.out.println("Energy controller stopped");
+		}
+		if (publisher != null) {
+			publisher.close();
 		}
 	}
 }

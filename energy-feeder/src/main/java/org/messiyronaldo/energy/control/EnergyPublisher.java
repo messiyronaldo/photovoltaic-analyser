@@ -16,7 +16,7 @@ public class EnergyPublisher implements Publisher {
 	private Connection connection;
 
 	public EnergyPublisher() {
-		gson = new GsonBuilder()
+		this.gson = new GsonBuilder()
 				.registerTypeAdapter(Instant.class, new InstantTypeAdapter())
 				.create();
 	}
@@ -35,6 +35,8 @@ public class EnergyPublisher implements Publisher {
 
 	@Override
 	public void publish(EnergyPrice energyPrice) {
+		validateEvent(energyPrice);
+
 		Session session = null;
 		MessageProducer producer = null;
 
@@ -44,8 +46,8 @@ public class EnergyPublisher implements Publisher {
 			producer = session.createProducer(destination);
 			producer.setDeliveryMode(DeliveryMode.PERSISTENT);
 
+			// El Gson ya serializará todos los campos automáticamente
 			String jsonEvent = gson.toJson(energyPrice);
-
 			TextMessage message = session.createTextMessage(jsonEvent);
 			producer.send(message);
 
@@ -57,19 +59,27 @@ public class EnergyPublisher implements Publisher {
 		}
 	}
 
+	private void validateEvent(EnergyPrice price) {
+		if (price == null || price.getPriceTimestamp() == null ||
+				price.getSourceSystem() == null) {
+			throw new IllegalArgumentException("Invalid EnergyPrice: missing required fields");
+		}
+
+		// Opcional: Validar que al menos uno de los precios no sea cero
+		if (price.getPricePVPC() == 0.0 && price.getPriceSpot() == 0.0) {
+			throw new IllegalArgumentException("Invalid EnergyPrice: both prices are zero");
+		}
+	}
+
 	private void closeResources(MessageProducer producer, Session session) {
 		try {
-			if (producer != null) {
-				producer.close();
-			}
+			if (producer != null) producer.close();
 		} catch (JMSException e) {
 			System.err.println("Error closing producer: " + e.getMessage());
 		}
 
 		try {
-			if (session != null) {
-				session.close();
-			}
+			if (session != null) session.close();
 		} catch (JMSException e) {
 			System.err.println("Error closing session: " + e.getMessage());
 		}
