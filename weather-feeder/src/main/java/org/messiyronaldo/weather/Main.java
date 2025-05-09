@@ -2,6 +2,8 @@ package org.messiyronaldo.weather;
 
 import org.messiyronaldo.weather.control.*;
 import org.messiyronaldo.weather.model.Location;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.List;
@@ -11,6 +13,7 @@ public class Main {
 	private static final long UPDATE_INTERVAL_MINUTES = 60 * 6;
 	private static final int CONTROLLER_START_DELAY_SECONDS = 3;
 	private static final List<WeatherController> controllers = new java.util.ArrayList<>();
+	private static final Logger logger = LoggerFactory.getLogger(Main.class);
 
 	public static void main(String[] args) {
 		validateArguments(args);
@@ -29,8 +32,10 @@ public class Main {
 			weatherStore = new SQLiteWeatherStore(databaseFileName);
 		} else if (storeType.equals("activemq")) {
 			weatherPublisher = new ActiveMQWeatherPublisher();
+			weatherPublisher.start();
+			logger.info("Weather publisher started successfully");
 		} else {
-			System.err.println("Invalid store type. Use 'sql' or 'activemq'.");
+			logger.error("Invalid store type. Use 'sql' or 'activemq'.");
 			System.exit(1);
 		}
 
@@ -41,7 +46,7 @@ public class Main {
 
 	private static void validateArguments(String[] args) {
 		if (args.length != 3) {
-			System.err.println("Usage: java -jar weather-feeder.jar <api-key> <database-file> <store-type>");
+			logger.error("Invalid arguments. Usage: java -jar weather-feeder.jar <api-key> <database-file> <store-type>");
 			System.exit(1);
 		}
 	}
@@ -57,22 +62,17 @@ public class Main {
 												WeatherProvider provider,
 												WeatherStore store,
 												WeatherPublisher publisher) {
-		System.out.println("Starting weather monitoring for " + locations.size() + " locations");
+		logger.info("Starting weather monitoring for {} locations", locations.size());
 
 		for (Location location : locations) {
-			WeatherController controller;
-			if (store != null) {
-				controller = new WeatherController(location, provider, store, null, UPDATE_INTERVAL_MINUTES);
-			} else {
-				controller = new WeatherController(location, provider, null, publisher, UPDATE_INTERVAL_MINUTES);
-			}
+			WeatherController controller = new WeatherController(location, provider, store, publisher, UPDATE_INTERVAL_MINUTES);
+			controller.start();
 			controllers.add(controller);
-			System.out.println("Controller started for: " + location.getName());
+			logger.info("Controller started for: {}", location.getName());
 			delayBetweenControllers();
 		}
 
-		System.out.println("Application running. Data will update every " +
-				UPDATE_INTERVAL_MINUTES + " minutes.");
+		logger.info("Application running. Data will update every {} minutes", UPDATE_INTERVAL_MINUTES);
 	}
 
 	private static void delayBetweenControllers() {
@@ -80,12 +80,13 @@ public class Main {
 			TimeUnit.SECONDS.sleep(CONTROLLER_START_DELAY_SECONDS);
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
+			logger.warn("Controller start delay interrupted");
 		}
 	}
 
 	private static void registerShutdownHook() {
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-			System.out.println("Shutting down weather-feeder application...");
+			logger.info("Shutting down weather-feeder application...");
 			shutdownAllControllers();
 		}));
 	}
@@ -94,14 +95,14 @@ public class Main {
 		for (WeatherController controller : controllers) {
 			controller.shutdown();
 		}
-		System.out.println("All weather controllers shut down successfully");
+		logger.info("All weather controllers shut down successfully");
 	}
 
 	private static void keepApplicationRunning() {
 		try {
 			Thread.currentThread().join();
 		} catch (InterruptedException e) {
-			System.out.println("Application terminated.");
+			logger.info("Application terminated");
 		}
 	}
 }

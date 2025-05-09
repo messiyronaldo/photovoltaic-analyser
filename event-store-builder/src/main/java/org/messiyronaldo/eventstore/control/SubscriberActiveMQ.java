@@ -1,10 +1,13 @@
 package org.messiyronaldo.eventstore.control;
 
 import org.apache.activemq.ActiveMQConnectionFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.jms.*;
 
 public class SubscriberActiveMQ implements Subscriber {
+	private static final Logger logger = LoggerFactory.getLogger(SubscriberActiveMQ.class);
 	private final String brokerUrl;
 	private final String clientId;
 	private final String subscriberId;
@@ -18,6 +21,7 @@ public class SubscriberActiveMQ implements Subscriber {
 		this.clientId = clientId;
 		this.subscriberId = subscriberId;
 		this.eventStore = eventStore;
+		logger.info("Subscriber initialized with client ID: {} and subscriber ID: {}", clientId, subscriberId);
 	}
 
 	@Override
@@ -28,9 +32,10 @@ public class SubscriberActiveMQ implements Subscriber {
 			connection.setClientID(clientId);
 			connection.start();
 			session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
-			System.out.println("Subscriber connected to ActiveMQ at " + brokerUrl);
+			logger.info("Subscriber connected to ActiveMQ at {}", brokerUrl);
 		} catch (JMSException e) {
-			throw new RuntimeException("Failed to start subscriber: " + e.getMessage(), e);
+			logger.error("Failed to start subscriber: {}", e.getMessage(), e);
+			throw new RuntimeException("Failed to start subscriber", e);
 		}
 	}
 
@@ -40,9 +45,10 @@ public class SubscriberActiveMQ implements Subscriber {
 			Topic topic = session.createTopic(topicName);
 			consumer = session.createDurableSubscriber(topic, subscriberId);
 			consumer.setMessageListener(message -> processMessage(message, topicName));
-			System.out.println("Subscribed to topic: " + topicName + " with ID: " + subscriberId);
+			logger.info("Subscribed to topic: {} with ID: {}", topicName, subscriberId);
 		} catch (JMSException e) {
-			throw new RuntimeException("Failed to subscribe to " + topicName + ": " + e.getMessage(), e);
+			logger.error("Failed to subscribe to {}: {}", topicName, e.getMessage(), e);
+			throw new RuntimeException("Failed to subscribe to " + topicName, e);
 		}
 	}
 
@@ -50,23 +56,33 @@ public class SubscriberActiveMQ implements Subscriber {
 		try {
 			if (message instanceof TextMessage) {
 				String json = ((TextMessage) message).getText();
-				System.out.println("Received message from topic: " + topicName);
+				logger.debug("Received message from topic: {}", topicName);
 				eventStore.storeEventToFile(json, topicName);
 			}
 		} catch (JMSException e) {
-			System.err.println("Error processing message: " + e.getMessage());
+			logger.error("Error processing message: {}", e.getMessage(), e);
 		}
 	}
 
 	@Override
 	public void close() {
 		try {
-			if (consumer != null) consumer.close();
-			if (session != null) session.close();
-			if (connection != null) connection.close();
-			System.out.println("Subscriber closed");
+			if (consumer != null) {
+				consumer.close();
+				logger.debug("Message consumer closed");
+			}
+			if (session != null) {
+				session.close();
+				logger.debug("JMS session closed");
+			}
+			if (connection != null) {
+				connection.close();
+				logger.debug("JMS connection closed");
+			}
+			logger.info("Subscriber closed successfully");
 		} catch (JMSException e) {
-			throw new RuntimeException("Failed to close subscriber: " + e.getMessage(), e);
+			logger.error("Failed to close subscriber: {}", e.getMessage(), e);
+			throw new RuntimeException("Failed to close subscriber", e);
 		}
 	}
 }

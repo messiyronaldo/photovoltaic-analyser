@@ -2,27 +2,29 @@ package org.messiyronaldo.weather.control;
 
 import org.messiyronaldo.weather.model.Location;
 import org.messiyronaldo.weather.model.Weather;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.*;
 import java.time.Instant;
 import java.util.*;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 public class SQLiteWeatherStore implements WeatherStore {
+	private static final Logger logger = LoggerFactory.getLogger(SQLiteWeatherStore.class);
 	private final String databaseFilePath;
-	private static final Logger logger = Logger.getLogger(SQLiteWeatherStore.class.getName());
 
 	public SQLiteWeatherStore(String databaseFilePath) {
 		this.databaseFilePath = databaseFilePath;
 		initializeDatabase();
+		logger.info("SQLite weather store initialized with database: {}", databaseFilePath);
 	}
 
 	private void initializeDatabase() {
 		try (Connection connection = openConnection()) {
 			createTables(connection);
+			logger.debug("Database tables initialized successfully");
 		} catch (SQLException e) {
-			logError("Database initialization failed", e);
+			logger.error("Failed to initialize database: {}", e.getMessage(), e);
 			throw new RuntimeException("Failed to initialize database", e);
 		}
 	}
@@ -36,7 +38,7 @@ public class SQLiteWeatherStore implements WeatherStore {
 	private String createWeatherTableSql() {
 		return "CREATE TABLE IF NOT EXISTS weather_forecasts (" +
 				"id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-				"timestamp TEXT NOT NULL, " +
+				"ts TEXT NOT NULL, " +
 				"prediction_timestamp TEXT NOT NULL, " +
 				"location_name TEXT NOT NULL, " +
 				"latitude REAL NOT NULL, " +
@@ -51,7 +53,7 @@ public class SQLiteWeatherStore implements WeatherStore {
 				"rain_volume REAL NOT NULL, " +
 				"snow_volume REAL NOT NULL, " +
 				"part_of_day TEXT NOT NULL, " +
-				"source_system TEXT NOT NULL," +
+				"ss TEXT NOT NULL," +
 				"UNIQUE(latitude, longitude, prediction_timestamp)" +
 				")";
 	}
@@ -61,18 +63,22 @@ public class SQLiteWeatherStore implements WeatherStore {
 			Class.forName("org.sqlite.JDBC");
 			return DriverManager.getConnection("jdbc:sqlite:" + databaseFilePath);
 		} catch (ClassNotFoundException e) {
+			logger.error("SQLite driver not found: {}", e.getMessage(), e);
 			throw new SQLException("SQLite driver not found", e);
 		}
 	}
 
 	@Override
 	public void saveWeatherForecasts(List<Weather> forecasts) {
-		if (isEmpty(forecasts)) return;
+		if (isEmpty(forecasts)) {
+			logger.debug("Empty forecast list - nothing to save");
+			return;
+		}
 
 		try (Connection connection = openConnection()) {
 			executeTransaction(connection, forecasts);
 		} catch (SQLException e) {
-			logError("Error saving weather forecasts", e);
+			logger.error("Failed to save weather forecasts: {}", e.getMessage(), e);
 		}
 	}
 
@@ -100,8 +106,9 @@ public class SQLiteWeatherStore implements WeatherStore {
 	private void rollbackTransaction(Connection connection) {
 		try {
 			connection.rollback();
+			logger.warn("Transaction rolled back due to error");
 		} catch (SQLException e) {
-			logError("Error rolling back transaction", e);
+			logger.error("Failed to rollback transaction: {}", e.getMessage(), e);
 		}
 	}
 
@@ -119,18 +126,18 @@ public class SQLiteWeatherStore implements WeatherStore {
 
 	private String createInsertSql() {
 		return "INSERT INTO weather_forecasts " +
-				"(timestamp, prediction_timestamp, location_name, latitude, longitude, " +
+				"(ts, prediction_timestamp, location_name, latitude, longitude, " +
 				"temperature, humidity, weather_id, weather_main, weather_description, " +
-				"cloudiness, wind_speed, rain_volume, snow_volume, part_of_day, source_system) " +
+				"cloudiness, wind_speed, rain_volume, snow_volume, part_of_day, ss) " +
 				"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 	}
 
 	private String createUpdateSql() {
 		return "UPDATE weather_forecasts SET " +
-				"timestamp = ?, temperature = ?, humidity = ?, " +
+				"ts = ?, temperature = ?, humidity = ?, " +
 				"weather_id = ?, weather_main = ?, weather_description = ?, " +
 				"cloudiness = ?, wind_speed = ?, rain_volume = ?, " +
-				"snow_volume = ?, part_of_day = ?, source_system = ? " +
+				"snow_volume = ?, part_of_day = ?, ss = ? " +
 				"WHERE latitude = ? AND longitude = ? AND prediction_timestamp = ?";
 	}
 
@@ -312,7 +319,7 @@ public class SQLiteWeatherStore implements WeatherStore {
 		try (Connection connection = openConnection()) {
 			forecasts = queryForecastsByLocation(connection, latitude, longitude);
 		} catch (SQLException e) {
-			logError("Error retrieving weather forecasts", e);
+			logger.error("Error retrieving weather forecasts: {}", e.getMessage(), e);
 		}
 
 		return forecasts;
@@ -341,7 +348,7 @@ public class SQLiteWeatherStore implements WeatherStore {
 		Location location = createLocationFromResultSet(results);
 
 		return new Weather(
-				Instant.parse(results.getString("timestamp")),
+				Instant.parse(results.getString("ts")),
 				location,
 				Instant.parse(results.getString("prediction_timestamp")),
 				results.getDouble("temperature"),
@@ -354,7 +361,7 @@ public class SQLiteWeatherStore implements WeatherStore {
 				results.getDouble("rain_volume"),
 				results.getDouble("snow_volume"),
 				results.getString("part_of_day"),
-				results.getString("source_system")
+				results.getString("ss")
 		);
 	}
 
@@ -367,14 +374,8 @@ public class SQLiteWeatherStore implements WeatherStore {
 	}
 
 	private void logOperationSummary(int inserted, int updated, int unchanged) {
-		System.out.println("Forecast operations summary: " +
-				inserted + " new, " +
-				updated + " updated, " +
-				unchanged + " unchanged.");
-	}
-
-	private void logError(String message, Exception e) {
-		logger.log(Level.SEVERE, message, e);
+		logger.info("Weather forecast operations summary - New: {}, Updated: {}, Unchanged: {}",
+			inserted, updated, unchanged);
 	}
 
 	private record LocationCoordinates(double latitude, double longitude) {
