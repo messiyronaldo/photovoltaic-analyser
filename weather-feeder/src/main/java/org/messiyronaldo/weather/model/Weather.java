@@ -3,7 +3,7 @@ package org.messiyronaldo.weather.model;
 import java.time.Instant;
 
 public class Weather {
-	private final Instant timestamp;
+	private final Instant ts;
 	private final Location location;
 	private final Instant predictionTimestamp;
 	private final double temperature;
@@ -16,13 +16,13 @@ public class Weather {
 	private final double rainVolume;
 	private final double snowVolume;
 	private final String partOfDay;
-	private final String sourceSystem;
+	private final String ss;
 
-	public Weather(Instant timestamp, Location location, Instant predictionTimestamp,
+	public Weather(Instant ts, Location location, Instant predictionTimestamp,
 				   double temperature, int humidity, int weatherID, String weatherMain,
 				   String weatherDescription, int cloudiness, double windSpeed,
-				   double rainVolume, double snowVolume, String partOfDay, String sourceSystem) {
-		this.timestamp = timestamp;
+				   double rainVolume, double snowVolume, String partOfDay, String ss) {
+		this.ts = ts;
 		this.location = location;
 		this.predictionTimestamp = predictionTimestamp;
 		this.temperature = temperature;
@@ -35,11 +35,11 @@ public class Weather {
 		this.rainVolume = rainVolume;
 		this.snowVolume = snowVolume;
 		this.partOfDay = partOfDay;
-		this.sourceSystem = sourceSystem;
+		this.ss = ss;
 	}
 
-	public Instant getTimestamp() {
-		return timestamp;
+	public Instant getTs() {
+		return ts;
 	}
 
 	public Location getLocation() {
@@ -90,14 +90,14 @@ public class Weather {
 		return partOfDay;
 	}
 
-	public String getSourceSystem() {
-		return sourceSystem;
+	public String getSs() {
+		return ss;
 	}
 
 	@Override
 	public String toString() {
 		return "Weather{" +
-				"timestamp=" + timestamp +
+				"timestamp=" + ts +
 				", location=" + location +
 				", predictionTimestamp=" + predictionTimestamp +
 				", temperature=" + temperature +
@@ -110,7 +110,7 @@ public class Weather {
 				", rainVolume=" + rainVolume +
 				", snowVolume=" + snowVolume +
 				", partOfDay='" + partOfDay + '\'' +
-				", sourceSystem='" + sourceSystem + '\'' +
+				", sourceSystem='" + ss + '\'' +
 				'}';
 	}
 }

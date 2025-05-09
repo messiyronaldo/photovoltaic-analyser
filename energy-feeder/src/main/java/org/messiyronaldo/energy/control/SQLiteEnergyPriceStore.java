@@ -184,7 +184,7 @@ public class SQLiteEnergyPriceStore implements EnergyPricesStore {
 		stmt.setString(2, timestampKey);
 		stmt.setDouble(3, price.getPricePVPC());
 		stmt.setDouble(4, price.getPriceSpot());
-		stmt.setString(5, price.getSourceSystem());
+		stmt.setString(5, price.getSs());
 		stmt.addBatch();
 	}
 

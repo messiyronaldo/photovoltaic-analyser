@@ -181,7 +181,7 @@ public class SQLiteWeatherStore implements WeatherStore {
 	private void addToInsertBatch(PreparedStatement statement, Weather forecast) throws SQLException {
 		Location location = forecast.getLocation();
 
-		statement.setString(1, forecast.getTimestamp().toString());
+		statement.setString(1, forecast.getTs().toString());
 		statement.setString(2, forecast.getPredictionTimestamp().toString());
 		statement.setString(3, location.getName());
 		statement.setDouble(4, location.getLatitude());
@@ -196,7 +196,7 @@ public class SQLiteWeatherStore implements WeatherStore {
 		statement.setDouble(13, forecast.getRainVolume());
 		statement.setDouble(14, forecast.getSnowVolume());
 		statement.setString(15, forecast.getPartOfDay());
-		statement.setString(16, forecast.getSourceSystem());
+		statement.setString(16, forecast.getSs());
 
 		statement.addBatch();
 	}
@@ -204,7 +204,7 @@ public class SQLiteWeatherStore implements WeatherStore {
 	private void addToUpdateBatch(PreparedStatement statement, Weather forecast) throws SQLException {
 		Location location = forecast.getLocation();
 
-		statement.setString(1, forecast.getTimestamp().toString());
+		statement.setString(1, forecast.getTs().toString());
 		statement.setDouble(2, forecast.getTemperature());
 		statement.setInt(3, forecast.getHumidity());
 		statement.setInt(4, forecast.getWeatherID());
@@ -215,7 +215,7 @@ public class SQLiteWeatherStore implements WeatherStore {
 		statement.setDouble(9, forecast.getRainVolume());
 		statement.setDouble(10, forecast.getSnowVolume());
 		statement.setString(11, forecast.getPartOfDay());
-		statement.setString(12, forecast.getSourceSystem());
+		statement.setString(12, forecast.getSs());
 		statement.setDouble(13, location.getLatitude());
 		statement.setDouble(14, location.getLongitude());
 		statement.setString(15, forecast.getPredictionTimestamp().toString());
