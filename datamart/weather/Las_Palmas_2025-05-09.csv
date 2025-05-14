@@ -1,0 +1,12 @@
+predictionTimestamp,location,temperature,humidity,cloudiness,weatherDescription,partOfDay
+2025-05-09T13:00:00Z,Las_Palmas,22.48,69.0,73.0,broken clouds,d
+2025-05-09T14:00:00Z,Las_Palmas,22.22,69.0,77.0,broken clouds,d
+2025-05-09T15:00:00Z,Las_Palmas,21.69,71.0,83.0,broken clouds,d
+2025-05-09T16:00:00Z,Las_Palmas,21.27,72.0,89.0,overcast clouds,d
+2025-05-09T17:00:00Z,Las_Palmas,20.73,73.0,95.0,overcast clouds,d
+2025-05-09T18:00:00Z,Las_Palmas,20.62,74.0,96.0,overcast clouds,d
+2025-05-09T19:00:00Z,Las_Palmas,20.43,76.0,87.0,overcast clouds,d
+2025-05-09T20:00:00Z,Las_Palmas,20.26,77.0,94.0,overcast clouds,n
+2025-05-09T21:00:00Z,Las_Palmas,20.15,77.0,96.0,overcast clouds,n
+2025-05-09T22:00:00Z,Las_Palmas,19.91,76.0,97.0,overcast clouds,n
+2025-05-09T23:00:00Z,Las_Palmas,19.85,76.0,97.0,overcast clouds,n
