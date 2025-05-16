@@ -30,19 +30,71 @@ public class EventStoreManager implements EventStore {
 	public void storeEventToFile(String json, String topicName) {
 		try {
 			JsonObject jsonObject = gson.fromJson(json, JsonObject.class);
-			String formattedTimestamp = getCurrentFormattedTimestamp();
+			String formattedTimestamp = getEventDateFromTs(jsonObject);
 			File directory = createDirectory(jsonObject, topicName);
 			File file = new File(directory, formattedTimestamp + ".events");
-			writeEventToFile(jsonObject, file);
-			logger.info("Event stored successfully at: {}", file.getAbsolutePath());
+
+			// Read all existing events
+			java.util.List<JsonObject> events = new java.util.ArrayList<>();
+			if (file.exists()) {
+				try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(file))) {
+					String line;
+					while ((line = reader.readLine()) != null) {
+						JsonObject existingEvent = gson.fromJson(line, JsonObject.class);
+						events.add(existingEvent);
+					}
+				}
+			}
+
+			String newEventKey = getEventUniqueKey(jsonObject, topicName);
+			boolean found = false;
+			for (int i = 0; i < events.size(); i++) {
+				JsonObject existingEvent = events.get(i);
+				String existingKey = getEventUniqueKey(existingEvent, topicName);
+				if (existingKey.equals(newEventKey)) {
+					found = true;
+					if (!eventsEqualIgnoringTs(existingEvent, jsonObject)) {
+						events.set(i, jsonObject); // Replace
+						logger.info("Event replaced in file: {}", file.getAbsolutePath());
+					} else {
+						logger.info("Duplicate event detected, not storing: {}", file.getAbsolutePath());
+					}
+					break;
+				}
+			}
+			if (!found) {
+				events.add(jsonObject);
+				logger.info("Event appended to file: {}", file.getAbsolutePath());
+			}
+
+			// Write all events back to the file
+			try (BufferedWriter writer = new BufferedWriter(new FileWriter(file, false))) {
+				for (JsonObject event : events) {
+					gson.toJson(event, writer);
+					writer.newLine();
+				}
+			}
 		} catch (IOException e) {
 			logger.error("Failed to store event: {}", e.getMessage(), e);
 		}
 	}
 
-	private String getCurrentFormattedTimestamp() {
+	private String getEventDateFromTs(JsonObject jsonObject) {
+		if (!jsonObject.has("ts")) {
+			throw new IllegalArgumentException("Event JSON does not contain 'ts' field");
+		}
+		String ts = jsonObject.get("ts").getAsString();
+		Instant instant = Instant.parse(ts);
 		DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd");
-		return Instant.now().atOffset(ZoneOffset.UTC).format(formatter);
+		return instant.atOffset(ZoneOffset.UTC).format(formatter);
+	}
+
+	private boolean eventsEqualIgnoringTs(JsonObject a, JsonObject b) {
+		JsonObject aCopy = a.deepCopy();
+		JsonObject bCopy = b.deepCopy();
+		aCopy.remove("ts");
+		bCopy.remove("ts");
+		return aCopy.equals(bCopy);
 	}
 
 	private File createDirectory(JsonObject jsonObject, String topicName) throws IOException {
@@ -61,15 +113,26 @@ public class EventStoreManager implements EventStore {
 		return directory;
 	}
 
-	private void writeEventToFile(JsonObject jsonObject, File file) throws IOException {
-		try (BufferedWriter writer = new BufferedWriter(new FileWriter(file, true))) {
-			gson.toJson(jsonObject, writer);
-			writer.newLine();
-			logger.debug("Wrote event to file: {}", file.getName());
-		}
-	}
-
 	private String getCleanedStringValue(JsonObject jsonObject) {
 		return jsonObject.get("ss").getAsString().replace("\"", "");
+	}
+
+	private String getEventUniqueKey(JsonObject event, String topicName) {
+		String topic = topicName.contains(".") ? topicName.substring(topicName.indexOf(".") + 1) : topicName;
+		if (topic.equalsIgnoreCase("Energy")) {
+			return event.has("priceTimestamp") ? event.get("priceTimestamp").getAsString() : "";
+		} else if (topic.equalsIgnoreCase("Weather")) {
+			StringBuilder key = new StringBuilder();
+			if (event.has("predictionTimestamp")) {
+				key.append(event.get("predictionTimestamp").getAsString());
+			}
+			if (event.has("location")) {
+				JsonObject loc = event.getAsJsonObject("location");
+				if (loc.has("latitude")) key.append("_").append(loc.get("latitude").getAsDouble());
+				if (loc.has("longitude")) key.append("_").append(loc.get("longitude").getAsDouble());
+			}
+			return key.toString();
+		}
+		return "";
 	}
 }
