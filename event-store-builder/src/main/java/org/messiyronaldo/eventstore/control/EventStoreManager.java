@@ -64,7 +64,7 @@ public class EventStoreManager implements EventStore {
 			}
 			if (!found) {
 				events.add(jsonObject);
-				logger.info("Event appended to file: {}", file.getAbsolutePath());
+				//logger.info("Event appended to file: {}", file.getAbsolutePath());
 			}
 
 			// Write all events back to the file

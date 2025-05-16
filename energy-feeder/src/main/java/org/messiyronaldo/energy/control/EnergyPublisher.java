@@ -82,7 +82,7 @@ public class EnergyPublisher implements Publisher {
 			session = createSession();
 			producer = createProducer(session);
 			sendEnergyEvent(price, session, producer);
-			logPublishedEvent();
+			//logPublishedEvent();
 		} catch (JMSException e) {
 			logger.error("Failed to publish energy price: {}", e.getMessage(), e);
 			throw new RuntimeException("Failed to publish energy price", e);
