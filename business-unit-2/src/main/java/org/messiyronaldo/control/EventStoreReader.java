@@ -28,6 +28,9 @@ public class EventStoreReader {
                     e.printStackTrace();
                 }
             }
+
+            // Generar archivos consolidados al finalizar la lectura
+            dataMartManager.generateConsolidatedFiles();
         }
         return events;
     }

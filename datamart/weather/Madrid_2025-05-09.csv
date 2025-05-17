@@ -10,3 +10,14 @@ predictionTimestamp,location,temperature,humidity,cloudiness,weatherDescription,
 2025-05-09T21:00:00Z,Madrid,13.63,58.0,59.0,broken clouds,n
 2025-05-09T22:00:00Z,Madrid,13.34,58.0,69.0,broken clouds,n
 2025-05-09T23:00:00Z,Madrid,13.08,58.0,76.0,broken clouds,n
+2025-05-09T13:00:00Z,Madrid,16.04,54.0,65.0,broken clouds,d
+2025-05-09T14:00:00Z,Madrid,16.09,52.0,61.0,broken clouds,d
+2025-05-09T15:00:00Z,Madrid,16.21,49.0,57.0,broken clouds,d
+2025-05-09T16:00:00Z,Madrid,17.72,45.0,49.0,scattered clouds,d
+2025-05-09T17:00:00Z,Madrid,17.72,46.0,41.0,scattered clouds,d
+2025-05-09T18:00:00Z,Madrid,16.48,49.0,52.0,broken clouds,d
+2025-05-09T19:00:00Z,Madrid,14.94,54.0,30.0,scattered clouds,d
+2025-05-09T20:00:00Z,Madrid,13.59,58.0,33.0,scattered clouds,n
+2025-05-09T21:00:00Z,Madrid,13.63,58.0,59.0,broken clouds,n
+2025-05-09T22:00:00Z,Madrid,13.34,58.0,69.0,broken clouds,n
+2025-05-09T23:00:00Z,Madrid,13.08,58.0,76.0,broken clouds,n
