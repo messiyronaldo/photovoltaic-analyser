@@ -10,15 +10,12 @@ public class BusinessUnitApplication {
     private static final String POWER_BI_URL = "https://app.powerbi.com/view?r=eyJrIjoiYmEyYmE1NjItM2JhOS00NDM4LTgzM2UtZGM5YjJhMWY1NDkzIiwidCI6ImIyYmI3MzFjLTQ2MGQtNDIwZi1hNDc1LTNlZDYxNWE4Mjk4NyIsImMiOjh9";
 
     public static void start() {
-        // Cargar datos históricos
         EventStoreReader eventStoreReader = new EventStoreReader();
         eventStoreReader.loadHistoricalEvents("energy");
         eventStoreReader.loadHistoricalEvents("weather");
 
-        // Abrir Power BI automáticamente
         openPowerBIReport();
 
-        // Iniciar servidor (opcional, solo si necesitas endpoints)
         Javalin app = Javalin.create().start(7000);
         app.get("/status", ctx -> ctx.result("Sistema operativo"));
     }
@@ -29,7 +26,6 @@ public class BusinessUnitApplication {
                 Desktop.getDesktop().browse(new URI(POWER_BI_URL));
                 System.out.println("Informe de Power BI abierto automáticamente");
             } else {
-                // Alternativa para entornos sin GUI
                 String os = System.getProperty("os.name").toLowerCase();
                 Runtime rt = Runtime.getRuntime();
 

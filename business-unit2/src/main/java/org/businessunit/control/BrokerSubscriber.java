@@ -30,7 +30,6 @@ public class BrokerSubscriber {
                 System.out.printf("[%s] Nuevos datos: %s%n", type, content);
                 dataMartManager.saveToDataMart(content);
 
-                // Generar archivos consolidados después de cada mensaje importante
                 if (content.contains("complete_dataset")) {
                     dataMartManager.generateConsolidatedFiles();
                 }

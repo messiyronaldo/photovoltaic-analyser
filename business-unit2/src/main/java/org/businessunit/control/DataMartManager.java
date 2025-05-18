@@ -92,7 +92,6 @@ public class DataMartManager {
         File file = new File(dir, "energy_consolidated.csv");
         Map<LocalDate, List<String>> newData = new HashMap<>();
 
-        // Procesar datos nuevos
         for (LocalDate date : energyData.keySet()) {
             Map<String, String> hoursData = energyData.get(date);
             if (hoursData.size() == 24) {
@@ -106,7 +105,6 @@ public class DataMartManager {
 
         try {
             if (!file.exists()) {
-                // Archivo no existe, crear nuevo con todos los datos
                 try (FileWriter writer = new FileWriter(file)) {
                     writer.append(ENERGY_HEADER);
                     newData.values().forEach(rows -> {
@@ -120,9 +118,8 @@ public class DataMartManager {
                     });
                 }
             } else {
-                // Archivo existe, actualizar solo con datos nuevos o modificados
                 Set<String> existingLines = new HashSet<>(Files.readAllLines(file.toPath()));
-                existingLines.remove(ENERGY_HEADER.trim()); // Eliminar header del conjunto
+                existingLines.remove(ENERGY_HEADER.trim());
 
                 try (FileWriter writer = new FileWriter(file, true)) {
                     for (List<String> rows : newData.values()) {
@@ -147,7 +144,6 @@ public class DataMartManager {
         File file = new File(dir, "weather_consolidated.csv");
         Map<LocalDate, List<String>> newData = new HashMap<>();
 
-        // Procesar datos nuevos
         for (LocalDate date : weatherData.keySet()) {
             Map<String, Map<String, String>> locationsData = weatherData.get(date);
             boolean allComplete = locationsData.values().stream()
@@ -169,7 +165,6 @@ public class DataMartManager {
 
         try {
             if (!file.exists()) {
-                // Archivo no existe, crear nuevo con todos los datos
                 try (FileWriter writer = new FileWriter(file)) {
                     writer.append(WEATHER_HEADER);
                     newData.values().forEach(rows -> {
@@ -183,9 +178,8 @@ public class DataMartManager {
                     });
                 }
             } else {
-                // Archivo existe, actualizar solo con datos nuevos o modificados
                 Set<String> existingLines = new HashSet<>(Files.readAllLines(file.toPath()));
-                existingLines.remove(WEATHER_HEADER.trim()); // Eliminar header del conjunto
+                existingLines.remove(WEATHER_HEADER.trim());
 
                 try (FileWriter writer = new FileWriter(file, true)) {
                     for (List<String> rows : newData.values()) {
