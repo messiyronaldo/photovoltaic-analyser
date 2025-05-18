@@ -60,7 +60,7 @@ El sistema está diseñado con una arquitectura modular orientada a eventos que 
 4. **Business Unit**: Procesa los datos almacenados para análisis y visualización en Power BI.
 
 <div align="center">
-  <img src="classdiagram.svg" alt="Diagrama de Clases Completo" width="900"/>
+  <img src="classdiagram.png" alt="Diagrama de Clases Completo" width="900"/>
   <p><em>Diagrama de Clases del Sistema</em></p>
 </div>
 
