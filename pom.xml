@@ -16,6 +16,7 @@
         <module>energy-feeder</module>
         <module>weather-feeder</module>
         <module>event-store-builder</module>
+        <module>business-unit2</module>
     </modules>
 
     <properties>
