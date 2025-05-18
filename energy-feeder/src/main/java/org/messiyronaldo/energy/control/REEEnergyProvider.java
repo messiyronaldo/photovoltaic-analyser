@@ -47,7 +47,7 @@ public class REEEnergyProvider implements EnergyPricesProvider {
 	@Override
 	public List<EnergyPrice> getEnergyPrices(LocalDate date) throws IOException {
 		String url = buildApiUrl(date);
-		logQueryUrl(url);
+		//logQueryUrl(url);
 
 		String jsonResponse = fetchDataFromApi(url);
 		return parseEnergyPrices(jsonResponse);

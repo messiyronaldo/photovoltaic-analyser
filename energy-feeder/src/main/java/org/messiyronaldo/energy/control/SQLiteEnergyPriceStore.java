@@ -1,32 +1,53 @@
 package org.messiyronaldo.energy.control;
 
 import org.messiyronaldo.energy.model.EnergyPrice;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.*;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.*;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 public class SQLiteEnergyPriceStore implements EnergyPricesStore {
-	private static final Logger logger = Logger.getLogger(SQLiteEnergyPriceStore.class.getName());
+	private static final Logger logger = LoggerFactory.getLogger(SQLiteEnergyPriceStore.class);
 	private static final ZoneId SPAIN_ZONE_ID = ZoneId.of("Europe/Madrid");
 	private static final double PRICE_COMPARISON_TOLERANCE = 0.0001;
+
+	@Override
+	public void saveEnergyPrice(EnergyPrice energyPrice) {
+		try (Connection conn = getConnection()) {
+			String sql = "INSERT INTO energy_prices (ts, price_timestamp, price_pvpc, price_spot, ss) " +
+					"VALUES (?, ?, ?, ?, ?)";
+			try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+				stmt.setString(1, Instant.now().toString());
+				stmt.setString(2, energyPrice.getTs().toString());
+				stmt.setDouble(3, energyPrice.getPricePVPC());
+				stmt.setDouble(4, energyPrice.getPriceSpot());
+				stmt.setString(5, energyPrice.getSs());
+				stmt.executeUpdate();
+			}
+		} catch (SQLException e) {
+			logger.error("Failed to save energy price: {}", e.getMessage(), e);
+			throw new RuntimeException("Failed to save energy price", e);
+		}
+	}
 
 	private final String dbPath;
 
 	public SQLiteEnergyPriceStore(String dbPath) {
 		this.dbPath = dbPath;
 		initializeDatabase();
+		logger.info("SQLite energy price store initialized with database: {}", dbPath);
 	}
 
 	private void initializeDatabase() {
 		try (Connection conn = getConnection()) {
 			createTables(conn);
+			logger.debug("Database tables initialized successfully");
 		} catch (SQLException e) {
-			logError("Error initializing database", e);
+			logger.error("Failed to initialize database: {}", e.getMessage(), e);
 			throw new RuntimeException("Failed to initialize database", e);
 		}
 	}
@@ -40,11 +61,11 @@ public class SQLiteEnergyPriceStore implements EnergyPricesStore {
 	private String createPricesTableSql() {
 		return "CREATE TABLE IF NOT EXISTS energy_prices (" +
 				"id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-				"timestamp TEXT NOT NULL, " +
+				"ts TEXT NOT NULL, " +
 				"price_timestamp TEXT NOT NULL, " +
 				"price_pvpc REAL NOT NULL, " +
 				"price_spot REAL NOT NULL, " +
-				"source_system TEXT NOT NULL, " +
+				"ss TEXT NOT NULL, " +
 				"UNIQUE(price_timestamp)" +
 				")";
 	}
@@ -54,6 +75,7 @@ public class SQLiteEnergyPriceStore implements EnergyPricesStore {
 			Class.forName("org.sqlite.JDBC");
 			return DriverManager.getConnection("jdbc:sqlite:" + dbPath);
 		} catch (ClassNotFoundException e) {
+			logger.error("SQLite driver not found: {}", e.getMessage(), e);
 			throw new SQLException("SQLite driver not found", e);
 		}
 	}
@@ -80,14 +102,14 @@ public class SQLiteEnergyPriceStore implements EnergyPricesStore {
 	@Override
 	public void saveEnergyPrices(List<EnergyPrice> prices) {
 		if (isEmpty(prices)) {
-			System.out.println("Empty price list - nothing to save");
+			logger.debug("Empty price list - nothing to save");
 			return;
 		}
 
 		try (Connection conn = getConnection()) {
 			processPriceUpdates(conn, prices);
 		} catch (SQLException e) {
-			logError("Error saving prices", e);
+			logger.error("Failed to save energy prices: {}", e.getMessage(), e);
 		}
 	}
 
@@ -106,6 +128,7 @@ public class SQLiteEnergyPriceStore implements EnergyPricesStore {
 			logOperationSummary(counts[0], counts[1], counts[2], prices.size());
 		} catch (SQLException e) {
 			conn.rollback();
+			logger.error("Transaction rolled back due to error: {}", e.getMessage(), e);
 			throw e;
 		} finally {
 			conn.setAutoCommit(true);
@@ -126,13 +149,13 @@ public class SQLiteEnergyPriceStore implements EnergyPricesStore {
 
 	private String createInsertSql() {
 		return "INSERT INTO energy_prices " +
-				"(timestamp, price_timestamp, price_pvpc, price_spot, source_system) " +
+				"(ts, price_timestamp, price_pvpc, price_spot, ss) " +
 				"VALUES (?, ?, ?, ?, ?)";
 	}
 
 	private String createUpdateSql() {
 		return "UPDATE energy_prices SET " +
-				"timestamp = ?, price_pvpc = ?, price_spot = ? " +
+				"ts = ?, price_pvpc = ?, price_spot = ? " +
 				"WHERE price_timestamp = ?";
 	}
 
@@ -184,7 +207,7 @@ public class SQLiteEnergyPriceStore implements EnergyPricesStore {
 		stmt.setString(2, timestampKey);
 		stmt.setDouble(3, price.getPricePVPC());
 		stmt.setDouble(4, price.getPriceSpot());
-		stmt.setString(5, price.getSourceSystem());
+		stmt.setString(5, price.getSs());
 		stmt.addBatch();
 	}
 
@@ -198,11 +221,8 @@ public class SQLiteEnergyPriceStore implements EnergyPricesStore {
 	}
 
 	private void logOperationSummary(int inserts, int updates, int unchanged, int total) {
-		System.out.println("=== Differential Save Summary ===");
-		System.out.println("New records inserted: " + inserts);
-		System.out.println("Records updated: " + updates);
-		System.out.println("Records unchanged: " + unchanged);
-		System.out.println("Total processed: " + total);
+		logger.info("Energy price operations summary - New: {}, Updated: {}, Unchanged: {}, Total: {}",
+			inserts, updates, unchanged, total);
 	}
 
 	@Override
@@ -211,8 +231,10 @@ public class SQLiteEnergyPriceStore implements EnergyPricesStore {
 
 		try (Connection conn = getConnection()) {
 			prices = queryPricesByTimeRange(conn, startTime, endTime);
+			logger.debug("Retrieved {} energy prices for time range: {} to {}",
+				prices.size(), startTime, endTime);
 		} catch (SQLException e) {
-			logError("Error retrieving prices", e);
+			logger.error("Failed to retrieve energy prices: {}", e.getMessage(), e);
 		}
 
 		return prices;
@@ -241,11 +263,11 @@ public class SQLiteEnergyPriceStore implements EnergyPricesStore {
 
 	private EnergyPrice createPriceFromResultSet(ResultSet rs) throws SQLException {
 		return new EnergyPrice(
-				Instant.parse(rs.getString("timestamp")),
+				Instant.parse(rs.getString("ts")),
 				Instant.parse(rs.getString("price_timestamp")),
 				rs.getDouble("price_pvpc"),
 				rs.getDouble("price_spot"),
-				rs.getString("source_system")
+				rs.getString("ss")
 		);
 	}
 
@@ -254,9 +276,5 @@ public class SQLiteEnergyPriceStore implements EnergyPricesStore {
 		Instant endOfDay = date.plusDays(1).atStartOfDay(SPAIN_ZONE_ID).minusSeconds(1).toInstant();
 
 		return getEnergyPrices(startOfDay, endOfDay);
-	}
-
-	private void logError(String message, Exception e) {
-		logger.log(Level.SEVERE, message, e);
 	}
 }

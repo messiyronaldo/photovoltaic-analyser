@@ -1,32 +1,57 @@
 package org.messiyronaldo.energy;
 
 import org.messiyronaldo.energy.control.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Main {
+    private static final Logger logger = LoggerFactory.getLogger(Main.class);
     private static final long UPDATE_INTERVAL_MINUTES = 60 * 12; // 12 hours
-    private static final String DATABASE_FILENAME = "photovoltaic-data.db";
     private static EnergyController energyController;
 
     public static void main(String[] args) {
-        EnergyPricesProvider energyProvider = new REEEnergyProvider();
-        EnergyPricesStore energyStore = new SQLiteEnergyPriceStore(DATABASE_FILENAME);
+        validateArguments(args);
 
-        System.out.println("Starting energy price monitoring");
+        String databaseFileName = args[0];
+        String storeType = args[1].toLowerCase();
+
+        EnergyPricesProvider energyProvider = new REEEnergyProvider();
+        EnergyPricesStore energyStore = null;
+        EnergyPublisher energyPublisher = null;
+
+        if (storeType.equals("sql")) {
+            energyStore = new SQLiteEnergyPriceStore(databaseFileName);
+        } else if (storeType.equals("activemq")) {
+            energyPublisher = new EnergyPublisher();
+            energyPublisher.start();
+            logger.info("Energy publisher started successfully");
+        } else {
+            logger.error("Invalid store type. Use 'sql' or 'activemq'.");
+            System.exit(1);
+        }
+
+        logger.info("Starting energy price monitoring");
 
         energyController = new EnergyController(
-                energyProvider, energyStore, UPDATE_INTERVAL_MINUTES);
+                energyProvider, energyStore, energyPublisher, UPDATE_INTERVAL_MINUTES);
 
-        System.out.println("Energy price controller started");
-        System.out.println("Application running. Data will update every " +
-                UPDATE_INTERVAL_MINUTES + " minutes.");
+        logger.info("Energy price controller started");
+        logger.info("Application running. Data will update every {} minutes", UPDATE_INTERVAL_MINUTES);
 
         registerShutdownHook();
         keepApplicationRunning();
     }
 
+    private static void validateArguments(String[] args) {
+        if (args.length != 2) {
+            logger.error("Invalid arguments. Usage: java -jar energy-feeder.jar <database-file> <store-type>");
+            System.exit(1);
+        }
+    }
+
     private static void registerShutdownHook() {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("Shutting down energy-feeder application...");
+            logger.info("Shutting down energy-feeder application...");
             shutdownController();
         }));
     }
@@ -34,7 +59,7 @@ public class Main {
     private static void shutdownController() {
         if (energyController != null) {
             energyController.shutdown();
-            System.out.println("Energy controller shut down successfully");
+            logger.info("Energy controller shut down successfully");
         }
     }
 
@@ -42,7 +67,7 @@ public class Main {
         try {
             Thread.currentThread().join();
         } catch (InterruptedException e) {
-            System.out.println("Application terminated.");
+            logger.info("Application terminated");
         }
     }
 }

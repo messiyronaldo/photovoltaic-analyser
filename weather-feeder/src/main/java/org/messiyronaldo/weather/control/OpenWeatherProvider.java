@@ -9,6 +9,8 @@ import okhttp3.Request;
 import okhttp3.Response;
 import org.messiyronaldo.weather.model.Location;
 import org.messiyronaldo.weather.model.Weather;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -18,6 +20,7 @@ import java.util.function.Function;
 import java.util.concurrent.TimeUnit;
 
 public class OpenWeatherProvider implements WeatherProvider {
+	private static final Logger logger = LoggerFactory.getLogger(OpenWeatherProvider.class);
 	private static final String OPENWEATHER_HOURLY_API_ENDPOINT = "https://pro.openweathermap.org/data/2.5/forecast/hourly";
 	private final String apiKey;
 	private final OkHttpClient httpClient;
@@ -31,6 +34,7 @@ public class OpenWeatherProvider implements WeatherProvider {
 		this.apiKey = apiKey;
 		this.httpClient = httpClient != null ? httpClient : createConfiguredHttpClient();
 		this.weatherParser = new JsonWeatherParser();
+		logger.info("OpenWeather provider initialized");
 	}
 
 	private OkHttpClient createConfiguredHttpClient() {
@@ -41,10 +45,15 @@ public class OpenWeatherProvider implements WeatherProvider {
 	}
 
 	@Override
-	public List<Weather> getHourlyForecast(Location location) throws IOException {
+	public List<Weather> getWeatherForecasts(Location location) throws IOException {
 		String apiUrl = buildWeatherApiUrlForLocation(location);
+		logger.debug("Fetching weather data for location: {} ({}, {})",
+			location.getName(), location.getLatitude(), location.getLongitude());
+
 		String jsonResponse = fetchWeatherDataFromApi(apiUrl);
-		return weatherParser.parseWeatherData(jsonResponse, location);
+		List<Weather> forecasts = weatherParser.parseWeatherData(jsonResponse, location);
+		logger.info("Retrieved {} weather forecasts for location: {}", forecasts.size(), location.getName());
+		return forecasts;
 	}
 
 	private String buildWeatherApiUrlForLocation(Location location) {
@@ -66,12 +75,14 @@ public class OpenWeatherProvider implements WeatherProvider {
 
 	private void validateResponse(Response response) throws IOException {
 		if (!response.isSuccessful()) {
+			logger.error("API request failed with status: {} - {}", response.code(), response.message());
 			throw new IOException("API error: " + response.code() + " " + response.message());
 		}
 	}
 
 	private String extractResponseBody(Response response) throws IOException {
 		if (response.body() == null) {
+			logger.error("API response body is null");
 			throw new IOException("API response body is null");
 		}
 		return response.body().string();
