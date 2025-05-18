@@ -1,4 +1,4 @@
-package org.messiyronaldo.control;
+package org.businessunit.control;
 
 import org.apache.activemq.ActiveMQConnectionFactory;
 import javax.jms.*;

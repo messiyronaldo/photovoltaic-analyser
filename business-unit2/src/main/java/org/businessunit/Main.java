@@ -1,7 +1,7 @@
-package org.messiyronaldo;
+package org.businessunit;
 
-import org.messiyronaldo.control.BrokerSubscriber;
-import org.messiyronaldo.control.BusinessUnitApplication;
+import org.businessunit.control.BrokerSubscriber;
+import org.businessunit.control.BusinessUnitApplication;
 
 public class Main {
     public static void main(String[] args) {
